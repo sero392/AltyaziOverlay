@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 13+ temalı ikon: tek renk, altyazı satırları balondan oyulmuş (evenOdd) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M35,31h38a8,8 0,0 1,8 8v24a8,8 0,0 1,-8 8h-27l-10,9v-9h-1a8,8 0,0 1,-8 -8v-24a8,8 0,0 1,8 -8z M39,43h30a3,3 0,0 1,0 6h-30a3,3 0,0 1,0 -6z M39,53h20a3,3 0,0 1,0 6h-20a3,3 0,0 1,0 -6z" />
+</vector>
