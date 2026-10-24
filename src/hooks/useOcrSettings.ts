@@ -7,13 +7,15 @@ const KEY_CROP = 'ocr_crop_ratio';
 export const OCR_INTERVALS = [300, 500, 800];
 export const OCR_CROP_RATIOS = [0.2, 0.3, 0.4];
 
-/**
- * OCR aralığı ve okuma alanı (kalıcı). Ara sahnelerde altyazı siyah bantta (alt ~%15),
- * oynanışta daha yukarıda (~%25-30) olduğu için varsayılan %30.
- */
+/** Arayüzde okuma ayarları gizliyken kullanılan sabit değerler. */
+export const DEFAULT_OCR_SETTINGS = { intervalMs: 300, cropRatio: 0.2 };
+
+/** OCR aralığı ve okuma alanı (kalıcı). Şu an arayüzde kullanılmıyor. */
 export function useOcrSettings() {
-  const [intervalMs, setIntervalState] = useState(500);
-  const [cropRatio, setCropState] = useState(0.3);
+  const [intervalMs, setIntervalState] = useState(
+    DEFAULT_OCR_SETTINGS.intervalMs,
+  );
+  const [cropRatio, setCropState] = useState(DEFAULT_OCR_SETTINGS.cropRatio);
 
   useEffect(() => {
     SubtitleCapture.getSetting(KEY_INTERVAL).then(v => {

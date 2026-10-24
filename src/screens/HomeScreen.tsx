@@ -8,11 +8,7 @@ import { Button, Card, Para, colors } from '../components/ui';
 import { SubtitleEntry } from '../domain/types';
 import { useCaptureSession } from '../hooks/useCaptureSession';
 import { useDeepLKey } from '../hooks/useDeepLKey';
-import {
-  OCR_CROP_RATIOS,
-  OCR_INTERVALS,
-  useOcrSettings,
-} from '../hooks/useOcrSettings';
+import { DEFAULT_OCR_SETTINGS } from '../hooks/useOcrSettings';
 import { useOverlayPermission } from '../hooks/useOverlayPermission';
 import { useSubtitleTranslator } from '../hooks/useSubtitleTranslator';
 import { useTvLink } from '../hooks/useTvLink';
@@ -22,8 +18,8 @@ import { DeepLTranslationService } from '../services/translation/DeepLTranslatio
 import { MockTranslationService } from '../services/translation/MockTranslationService';
 
 /**
- * Yönetim paneli: altyazı okumayı başlat/durdur, PS5 durumu, DeepL, TV, okuma ayarları
- * ve son çeviriler.
+ * Yönetim paneli: altyazı okumayı başlat/durdur, PS5 durumu, DeepL, TV ve son çeviriler.
+ * Okuma ayarları şimdilik gizli; DEFAULT_OCR_SETTINGS kullanılır.
  */
 export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const deeplKey = useDeepLKey();
@@ -49,14 +45,13 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const tv = useTvLink();
   const overlay = useOverlayPermission();
   const session = useCaptureSession();
-  const ocr = useOcrSettings();
   const { history, stats, clearHistory } = useSubtitleTranslator(translator);
 
   const onToggle = () => {
     if (session.running) {
       session.stop();
     } else {
-      session.start({ intervalMs: ocr.intervalMs, cropRatio: ocr.cropRatio });
+      session.start(DEFAULT_OCR_SETTINGS);
     }
   };
 
@@ -85,6 +80,19 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
           loading={session.starting}
           variant={session.running ? 'danger' : 'primary'}
         />
+        {overlay.granted === false ? (
+          <>
+            <Para>
+              Çeviriyi telefonda da görmek için "üstte gösterme" izni gerekir
+              (TV için gerekmez).
+            </Para>
+            <Button
+              label="Üstte gösterme iznini ver"
+              onPress={overlay.request}
+              variant="ghost"
+            />
+          </>
+        ) : null}
       </Card>
 
       <ConsoleCard onRepair={onOpenWizard} />
@@ -103,39 +111,6 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
           onChange={tv.update}
         />
       ) : null}
-
-      <Card title="Okuma ayarları">
-        <Text style={styles.label}>OCR aralığı</Text>
-        <ChipGroup
-          options={OCR_INTERVALS}
-          value={ocr.intervalMs}
-          onChange={ocr.setIntervalMs}
-          format={v => `${v} ms`}
-          disabled={session.running}
-        />
-        <Text style={styles.label}>Okuma alanı (ekranın altından)</Text>
-        <ChipGroup
-          options={OCR_CROP_RATIOS}
-          value={ocr.cropRatio}
-          onChange={ocr.setCropRatio}
-          format={v => `%${Math.round(v * 100)}`}
-          disabled={session.running}
-        />
-        {session.running ? <Para>Değiştirmek için önce durdur.</Para> : null}
-        {overlay.granted === false ? (
-          <>
-            <Para>
-              Çeviriyi telefonda da görmek için "üstte gösterme" izni gerekir
-              (TV için gerekmez).
-            </Para>
-            <Button
-              label="Üstte gösterme iznini ver"
-              onPress={overlay.request}
-              variant="ghost"
-            />
-          </>
-        ) : null}
-      </Card>
 
       <View style={styles.statsRow}>
         <Stat label="Gelen" value={stats.received} />
@@ -199,39 +174,6 @@ const HistoryItem = React.memo(({ item }: { item: SubtitleEntry }) => (
   </View>
 ));
 
-function ChipGroup({
-  options,
-  value,
-  onChange,
-  format,
-  disabled,
-}: {
-  options: number[];
-  value: number;
-  onChange: (v: number) => void;
-  format: (v: number) => string;
-  disabled?: boolean;
-}) {
-  return (
-    <View style={styles.chips}>
-      {options.map(v => (
-        <Pressable
-          key={v}
-          disabled={disabled}
-          onPress={() => onChange(v)}
-          style={[
-            styles.chip,
-            value === v && styles.chipActive,
-            disabled && styles.disabled,
-          ]}
-        >
-          <Text style={styles.chipText}>{format(v)}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <View style={styles.stat}>
@@ -246,16 +188,6 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 24, fontWeight: '700', marginTop: 12 },
   subtitle: { color: colors.muted, marginTop: 4 },
   label: { color: colors.muted, fontSize: 13, marginTop: 4 },
-  chips: { flexDirection: 'row', gap: 8 },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: colors.border,
-  },
-  chipActive: { backgroundColor: colors.primary },
-  chipText: { color: colors.text },
-  disabled: { opacity: 0.5 },
   statsRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
   stat: {
     flex: 1,

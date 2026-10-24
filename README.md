@@ -60,7 +60,7 @@ Sen oyunu kendi hesabınla, kendi kolunla oynamaya devam edersin. Telefon ikinci
 3. Telefonda uygulamayı aç. Kurulum sihirbazı sırasıyla Remote Play hesabını, PS5 seçimini, hesap kimliğini, eşleştirmeyi, DeepL anahtarını ve TV bağlantısını soracak.
 4. Oyunu aç, telefonda **Başlat**'a bas ve telefonu bırak.
 
-**Okuma alanı:** Ekranın alttan ne kadarının okunacağı (%20 / %30 / %40). Ara sahnelerde altyazı siyah bantta (~alt %15), oynanışta daha yukarıda (~%25–30) olduğu için varsayılan %30'dur.
+**Okuma ayarları:** Ekran 300 ms'de bir okunur ve yalnızca alttaki %20'lik alana bakılır. Bu ayarlar şimdilik arayüzde gizli; değiştirmek için `src/hooks/useOcrSettings.ts` içindeki `DEFAULT_OCR_SETTINGS` değerlerini düzenle.
 
 ## Derleme
 
