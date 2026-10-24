@@ -1,0 +1,8 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'AltyaziOverlay'
+include ':app'
+include ':remoteplay'   // chiaki-ng tabanlı PS Remote Play istemcisi (yayından kareleri alır)
+include ':tv'   // Android TV alıcı uygulaması (telefondan gelen çeviriyi HDMI görüntüsünün üstüne yazar)
+includeBuild('../node_modules/@react-native/gradle-plugin')
