@@ -24,13 +24,31 @@ internal object ChiakiNative {
 
     interface SessionCallback {
         fun onConnected()
-        fun onQuit(reason: Int, reasonText: String)
+        /** @param appReason PS5'in oturum isteğini reddetme kodu (0 = yok), bkz. [SessionFailure] */
+        fun onQuit(reason: Int, reasonText: String, appReason: Long)
 
         /** Sıkıştırılmış video karesi (H.264/H.265 Annex-B). false dönerse chiaki IDR ister. */
         fun onVideoSample(data: ByteArray, framesLost: Int): Boolean
     }
 
+    /** Konsol listesi her ping turunda gelir; diziler aynı uzunlukta ve paraleldir. */
+    interface DiscoveryCallback {
+        fun onHosts(
+            states: IntArray,
+            ps5: BooleanArray,
+            addrs: Array<String?>,
+            names: Array<String?>,
+            hostIds: Array<String?>,
+        )
+    }
+
     external fun errorString(code: Int): String
+
+    external fun discoveryStart(sendHost: String, pingMs: Int, callback: DiscoveryCallback): Long
+    external fun discoveryStop(ptr: Long)
+
+    /** @return chiaki hata kodu (0 = başarılı) */
+    external fun wakeup(host: String, registKey: ByteArray, ps5: Boolean): Int
 
     external fun registStart(
         host: String,

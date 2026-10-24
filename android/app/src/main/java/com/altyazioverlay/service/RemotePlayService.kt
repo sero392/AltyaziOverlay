@@ -29,6 +29,7 @@ import com.altyazioverlay.ocr.TextRecognizerEngine
 import com.altyazioverlay.overlay.FloatingSubtitleWindow
 import com.altyazioverlay.remoteplay.RegisteredConsole
 import com.altyazioverlay.remoteplay.RemotePlayClient
+import com.altyazioverlay.remoteplay.SessionFailure
 import com.altyazioverlay.remoteplay.StreamSettings
 
 /**
@@ -115,7 +116,19 @@ class RemotePlayService : Service() {
     // ------------------------------------------------------------------ session
 
     private fun connect() {
-        val target = console ?: return
+        val stored = console ?: return
+        if (stopping) return
+        updateNotification("${stored.nickname} aranıyor…")
+        // Bulma + gerekirse uyandırma (bloklar; worker thread'indeyiz).
+        val target = when (val r = ConsolePreparer(this).prepare(stored, ::updateNotification)) {
+            is ConsolePreparer.Result.Ready -> r.console
+            is ConsolePreparer.Result.NotFound -> r.console  // yanıt yok: yine de doğrudan dene
+            is ConsolePreparer.Result.WakeFailed -> {
+                scheduleReconnect("${stored.nickname} uyandırılamadı")
+                return
+            }
+        }
+        console = target
         if (stopping) return
         updateNotification("${target.nickname}'a bağlanılıyor…")
         val started = client.start(
@@ -128,13 +141,18 @@ class RemotePlayService : Service() {
                     SubtitleEventBus.publishState(running = true)
                 }
 
-                override fun onDisconnected(reason: String, isError: Boolean) {
+                override fun onDisconnected(reason: String, isError: Boolean, failure: SessionFailure?) {
                     if (stopping) return
-                    Log.w(TAG, "Stream ended: $reason")
+                    Log.w(TAG, "Stream ended: $reason (${failure ?: "-"})")
                     // chiaki'nin kendi thread'indeyiz: oturumu oradan durdurmak kilitlenir.
                     worker.post {
                         client.stop()
-                        scheduleReconnect("Bağlantı koptu: $reason")
+                        when {
+                            // Yeniden denemek işe yaramaz (ör. Remote Play kapalı): dur ve söyle.
+                            failure != null && !failure.retryable -> fail(failure.message)
+                            failure != null -> scheduleReconnect(failure.message)
+                            else -> scheduleReconnect("Bağlantı koptu: $reason")
+                        }
                     }
                 }
             },

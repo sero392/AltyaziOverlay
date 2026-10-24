@@ -11,7 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
 #include <chiaki/common.h>
+#include <chiaki/discoveryservice.h>
 #include <chiaki/log.h>
 #include <chiaki/regist.h>
 #include <chiaki/session.h>
@@ -180,6 +184,141 @@ JNIEXPORT void JNICALL JNI_FCN(registFree)(JNIEnv *env, jobject obj, jlong ptr)
 	free(r);
 }
 
+// ======================================================================== discovery (bulma / uyandırma)
+
+typedef struct
+{
+	ChiakiDiscoveryService service;
+	ChiakiLog log;
+	jobject callback;            // DiscoveryCallback (global ref)
+	jmethodID on_hosts;
+	jclass string_class;         // global ref
+} Discovery;
+
+static jstring str_or_null(JNIEnv *env, const char *s)
+{
+	return s ? (*env)->NewStringUTF(env, s) : NULL;
+}
+
+// chiaki keşif thread'inden: konsol listesi her ping turunda (değişmese de) gelir.
+static void discovery_cb(ChiakiDiscoveryHost *hosts, size_t count, void *user)
+{
+	Discovery *d = user;
+	JNIEnv *env = get_env();
+	if(!env)
+		return;
+	jintArray states = (*env)->NewIntArray(env, (jsize)count);
+	jbooleanArray ps5 = (*env)->NewBooleanArray(env, (jsize)count);
+	jobjectArray addrs = (*env)->NewObjectArray(env, (jsize)count, d->string_class, NULL);
+	jobjectArray names = (*env)->NewObjectArray(env, (jsize)count, d->string_class, NULL);
+	jobjectArray ids = (*env)->NewObjectArray(env, (jsize)count, d->string_class, NULL);
+	for(size_t i = 0; i < count; i++)
+	{
+		jint state = hosts[i].state;
+		jboolean is_ps5 = chiaki_discovery_host_is_ps5(&hosts[i]);
+		(*env)->SetIntArrayRegion(env, states, (jsize)i, 1, &state);
+		(*env)->SetBooleanArrayRegion(env, ps5, (jsize)i, 1, &is_ps5);
+		jstring a = str_or_null(env, hosts[i].host_addr);
+		jstring n = str_or_null(env, hosts[i].host_name);
+		jstring h = str_or_null(env, hosts[i].host_id);
+		(*env)->SetObjectArrayElement(env, addrs, (jsize)i, a);
+		(*env)->SetObjectArrayElement(env, names, (jsize)i, n);
+		(*env)->SetObjectArrayElement(env, ids, (jsize)i, h);
+		if(a) (*env)->DeleteLocalRef(env, a);
+		if(n) (*env)->DeleteLocalRef(env, n);
+		if(h) (*env)->DeleteLocalRef(env, h);
+	}
+	(*env)->CallVoidMethod(env, d->callback, d->on_hosts, states, ps5, addrs, names, ids);
+	if((*env)->ExceptionCheck(env))
+		(*env)->ExceptionClear(env);
+	(*env)->DeleteLocalRef(env, states);
+	(*env)->DeleteLocalRef(env, ps5);
+	(*env)->DeleteLocalRef(env, addrs);
+	(*env)->DeleteLocalRef(env, names);
+	(*env)->DeleteLocalRef(env, ids);
+}
+
+/**
+ * Ağdaki PlayStation'ları arar. @param send_host "255.255.255.255" (yayın) ya da tek bir IP.
+ * @return yerel işaretçi, hata durumunda 0
+ */
+JNIEXPORT jlong JNICALL JNI_FCN(discoveryStart)(JNIEnv *env, jobject obj, jstring send_host, jint ping_ms, jobject callback)
+{
+	(void)obj;
+	Discovery *d = calloc(1, sizeof(Discovery));
+	if(!d)
+		return 0;
+	chiaki_log_init(&d->log, CHIAKI_LOG_ERROR | CHIAKI_LOG_WARNING, log_cb, NULL);
+	d->callback = (*env)->NewGlobalRef(env, callback);
+	d->on_hosts = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, callback), "onHosts",
+			"([I[Z[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
+	d->string_class = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "java/lang/String"));
+
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;  // port her ping'de servis tarafından (PS4/PS5) ayarlanır
+	const char *host = (*env)->GetStringUTFChars(env, send_host, NULL);
+	int ok = inet_pton(AF_INET, host, &addr.sin_addr);
+	(*env)->ReleaseStringUTFChars(env, send_host, host);
+
+	ChiakiDiscoveryServiceOptions options;
+	memset(&options, 0, sizeof(options));
+	options.hosts_max = 8;
+	options.host_drop_pings = 3;
+	options.ping_ms = (uint64_t)ping_ms;
+	options.ping_initial_ms = 0;
+	options.send_addr = (struct sockaddr_storage *)&addr;
+	options.send_addr_size = sizeof(addr);
+	options.cb = discovery_cb;
+	options.cb_user = d;
+
+	ChiakiErrorCode err = ok == 1
+			? chiaki_discovery_service_init(&d->service, &options, &d->log)
+			: CHIAKI_ERR_INVALID_DATA;
+	if(err != CHIAKI_ERR_SUCCESS)
+	{
+		__android_log_print(ANDROID_LOG_ERROR, TAG, "discovery start failed: %s", chiaki_error_string(err));
+		(*env)->DeleteGlobalRef(env, d->callback);
+		(*env)->DeleteGlobalRef(env, d->string_class);
+		free(d);
+		return 0;
+	}
+	return (jlong)(intptr_t)d;
+}
+
+JNIEXPORT void JNICALL JNI_FCN(discoveryStop)(JNIEnv *env, jobject obj, jlong ptr)
+{
+	(void)obj;
+	Discovery *d = (Discovery *)(intptr_t)ptr;
+	if(!d)
+		return;
+	chiaki_discovery_service_fini(&d->service);
+	(*env)->DeleteGlobalRef(env, d->callback);
+	(*env)->DeleteGlobalRef(env, d->string_class);
+	free(d);
+}
+
+/**
+ * Bekleme modundaki konsolu uyandırır. Kimlik bilgisi eşleşmede alınan regist anahtarıdır:
+ * 16 baytlık alanın başındaki onaltılık (hex) metin, 64 bit sayıya çevrilir.
+ */
+JNIEXPORT jint JNICALL JNI_FCN(wakeup)(JNIEnv *env, jobject obj, jstring host, jbyteArray regist_key, jboolean ps5)
+{
+	(void)obj;
+	char key_str[CHIAKI_SESSION_AUTH_SIZE + 1];
+	memset(key_str, 0, sizeof(key_str));
+	if(!copy_byte_array(env, regist_key, key_str, CHIAKI_SESSION_AUTH_SIZE))
+		return CHIAKI_ERR_INVALID_DATA;
+	uint64_t credential = (uint64_t)strtoull(key_str, NULL, 16);
+
+	ChiakiLog log;
+	chiaki_log_init(&log, CHIAKI_LOG_ERROR | CHIAKI_LOG_WARNING | CHIAKI_LOG_INFO, log_cb, NULL);
+	const char *host_str = (*env)->GetStringUTFChars(env, host, NULL);
+	ChiakiErrorCode err = chiaki_discovery_wakeup(&log, NULL, host_str, credential, ps5);
+	(*env)->ReleaseStringUTFChars(env, host, host_str);
+	return err;
+}
+
 // ======================================================================== session (yayın)
 
 typedef struct
@@ -188,9 +327,23 @@ typedef struct
 	ChiakiLog log;
 	jobject callback;            // SessionCallback (global ref)
 	jmethodID on_connected;
+	// PS5'in oturum isteğini reddetme nedeni (ör. 0x80108b12 = Remote Play etkin değil).
+	// chiaki bunu sadece loga yazar; session_log_cb yakalar.
+	volatile uint32_t app_reason;
 	jmethodID on_quit;
 	jmethodID on_video;
 } Session;
+
+#define APP_REASON_PREFIX "Reported Application Reason: "
+
+// Oturum logları: Android loguna yazar ve PS5'in bildirdiği uygulama hata kodunu yakalar.
+static void session_log_cb(ChiakiLogLevel level, const char *msg, void *user)
+{
+	Session *s = user;
+	if(s && msg && strncmp(msg, APP_REASON_PREFIX, strlen(APP_REASON_PREFIX)) == 0)
+		s->app_reason = (uint32_t)strtoul(msg + strlen(APP_REASON_PREFIX), NULL, 0);
+	log_cb(level, msg, NULL);
+}
 
 static void event_cb(ChiakiEvent *event, void *user)
 {
@@ -208,7 +361,7 @@ static void event_cb(ChiakiEvent *event, void *user)
 			const char *reason = event->quit.reason_str ? event->quit.reason_str
 					: chiaki_quit_reason_string(event->quit.reason);
 			jstring str = (*env)->NewStringUTF(env, reason ? reason : "");
-			(*env)->CallVoidMethod(env, s->callback, s->on_quit, (jint)event->quit.reason, str);
+			(*env)->CallVoidMethod(env, s->callback, s->on_quit, (jint)event->quit.reason, str, (jlong)s->app_reason);
 			break;
 		}
 		case CHIAKI_EVENT_LOGIN_PIN_REQUEST:
@@ -253,7 +406,7 @@ JNIEXPORT jlong JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jstring
 	Session *s = calloc(1, sizeof(Session));
 	if(!s)
 		return 0;
-	chiaki_log_init(&s->log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, log_cb, NULL);
+	chiaki_log_init(&s->log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, session_log_cb, s);
 
 	ChiakiConnectInfo info;
 	memset(&info, 0, sizeof(info));
@@ -282,7 +435,7 @@ JNIEXPORT jlong JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jstring
 	s->callback = (*env)->NewGlobalRef(env, callback);
 	jclass cls = (*env)->GetObjectClass(env, callback);
 	s->on_connected = (*env)->GetMethodID(env, cls, "onConnected", "()V");
-	s->on_quit = (*env)->GetMethodID(env, cls, "onQuit", "(ILjava/lang/String;)V");
+	s->on_quit = (*env)->GetMethodID(env, cls, "onQuit", "(ILjava/lang/String;J)V");
 	s->on_video = (*env)->GetMethodID(env, cls, "onVideoSample", "([BI)Z");
 
 	chiaki_session_set_event_cb(&s->session, event_cb, s);

@@ -5,11 +5,15 @@ import android.media.Image
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
+import com.altyazioverlay.remoteplay.DiscoveredConsole
+import com.altyazioverlay.remoteplay.PsDiscovery
 import com.altyazioverlay.remoteplay.RegisteredConsole
 import com.altyazioverlay.remoteplay.RemotePlayClient
+import com.altyazioverlay.remoteplay.SessionFailure
 import com.altyazioverlay.remoteplay.StreamSettings
 import com.altyazioverlay.service.RemotePlayService
 import com.altyazioverlay.service.RemotePlayStore
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -17,9 +21,11 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * PS Remote Play (chiaki-ng) köprüsü: eşleştirme, arka planda altyazı yayını
@@ -41,6 +47,80 @@ class RemotePlayModule(
     fun getConsole(promise: Promise) {
         val console = loadConsole()
         promise.resolve(console?.let { "${it.nickname} (${it.host})" })
+    }
+
+    // ------------------------------------------------------------------ bulma / uyandırma
+
+    /**
+     * Ağdaki PlayStation'ları [timeoutMs] boyunca arar.
+     * @return [{ host, name, state: READY|STANDBY|UNKNOWN, ps5, paired }]
+     */
+    @ReactMethod
+    fun discover(timeoutMs: Double, promise: Promise) {
+        val paired = loadConsole()
+        val pairedMac = paired?.serverMac?.joinToString("") { "%02X".format(it) }
+        val found = ConcurrentHashMap<String, DiscoveredConsole>()
+        val discovery = PsDiscovery()
+        if (!discovery.start({ list -> list.forEach { found[it.host] = it } })) {
+            promise.reject(E_DISCOVERY, "Ağda arama başlatılamadı (Wi-Fi bağlı mı?)")
+            return
+        }
+        worker.schedule({
+            discovery.stop()
+            val result = Arguments.createArray()
+            found.values.sortedBy { it.name }.forEach { c ->
+                result.pushMap(Arguments.createMap().apply {
+                    putString("host", c.host)
+                    putString("name", c.name)
+                    putString("state", c.state.name)
+                    putBoolean("ps5", c.ps5)
+                    putBoolean("paired", pairedMac != null && c.hostId.equals(pairedMac, ignoreCase = true))
+                })
+            }
+            promise.resolve(result)
+        }, timeoutMs.toLong().coerceIn(500L, 15_000L), TimeUnit.MILLISECONDS)
+    }
+
+    /**
+     * Eşleşmiş konsolun bilgisi ve anlık durumu.
+     * @return { nickname, host, state: READY|STANDBY|OFFLINE } ya da eşleşme yoksa null
+     */
+    @ReactMethod
+    fun getPairedConsole(promise: Promise) {
+        val console = loadConsole()
+        if (console == null) {
+            promise.resolve(null)
+            return
+        }
+        val mac = console.serverMac.joinToString("") { "%02X".format(it) }
+        val state = AtomicReference("OFFLINE")
+        val discovery = PsDiscovery()
+        discovery.start({ list ->
+            list.firstOrNull { it.hostId.equals(mac, ignoreCase = true) || it.host == console.host }
+                ?.let { state.set(it.state.name) }
+        }, pingMs = 500)
+        worker.schedule({
+            discovery.stop()
+            promise.resolve(Arguments.createMap().apply {
+                putString("nickname", console.nickname)
+                putString("host", console.host)
+                putString("state", state.get())
+            })
+        }, 2_000L, TimeUnit.MILLISECONDS)
+    }
+
+    /** Bekleme modundaki eşleşmiş konsolu uyandırır. */
+    @ReactMethod
+    fun wake(promise: Promise) {
+        val console = loadConsole()
+        if (console == null) {
+            promise.reject(E_INPUT, "Önce PS5 ile eşleştirin")
+            return
+        }
+        worker.execute {
+            if (PsDiscovery.wakeup(console)) promise.resolve(true)
+            else promise.reject(E_DISCOVERY, "Uyandırma isteği gönderilemedi")
+        }
     }
 
     /**
@@ -108,8 +188,8 @@ class RemotePlayModule(
                         Log.i(TAG, "Stream connected")
                     }
 
-                    override fun onDisconnected(reason: String, isError: Boolean) {
-                        finish(Result.failure(IllegalStateException("Yayın kapandı: $reason")))
+                    override fun onDisconnected(reason: String, isError: Boolean, failure: SessionFailure?) {
+                        finish(Result.failure(IllegalStateException(failure?.message ?: "Yayın kapandı: $reason")))
                     }
                 },
                 { image ->
@@ -215,5 +295,6 @@ class RemotePlayModule(
         private const val E_INPUT = "E_INPUT"
         private const val E_REGIST = "E_REGIST"
         private const val E_STREAM = "E_STREAM"
+        private const val E_DISCOVERY = "E_DISCOVERY"
     }
 }

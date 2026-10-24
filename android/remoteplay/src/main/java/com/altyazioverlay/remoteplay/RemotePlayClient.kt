@@ -68,7 +68,11 @@ class RemotePlayClient {
 
     interface SessionListener {
         fun onConnected()
-        fun onDisconnected(reason: String, isError: Boolean)
+        /**
+         * @param failure PS5 oturumu reddettiyse nedeni (bilinen kodlar); [SessionFailure.retryable]
+         *   false ise yeniden denemek anlamsızdır.
+         */
+        fun onDisconnected(reason: String, isError: Boolean, failure: SessionFailure?)
     }
 
     fun interface FrameListener {
@@ -145,10 +149,14 @@ class RemotePlayClient {
                 sessionListener.onConnected()
             }
 
-            override fun onQuit(reason: Int, reasonText: String) {
-                Log.i(TAG, "Session quit: $reason $reasonText")
+            override fun onQuit(reason: Int, reasonText: String, appReason: Long) {
+                Log.i(TAG, "Session quit: $reason $reasonText (app reason 0x${appReason.toString(16)})")
                 // CHIAKI_QUIT_REASON_STOPPED (1) = bizim durdurmamız.
-                sessionListener.onDisconnected(reasonText, reason != QUIT_REASON_STOPPED)
+                sessionListener.onDisconnected(
+                    reasonText,
+                    reason != QUIT_REASON_STOPPED,
+                    SessionFailure.fromCode(appReason),
+                )
             }
 
             override fun onVideoSample(data: ByteArray, framesLost: Int): Boolean {
