@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { RemotePlay } from '../native/RemotePlay';
 import { CaptureOptions, SubtitleCapture } from '../native/SubtitleCapture';
 
-/** Foreground service yaşam döngüsü: başlat / durdur / native durum olayları. */
+/**
+ * Kare kaynağı. 'remoteplay': PS5 yayını (chiaki-ng) — varsayılan.
+ * 'screen': ekran yakalama (MediaProjection + ayrı Chiaki uygulaması) — yedek, devre dışı;
+ * kodu korunuyor, gerekirse buradan tekrar açılabilir.
+ */
+const CAPTURE_SOURCE: 'remoteplay' | 'screen' = 'remoteplay';
+
+/** Altyazı okuma servisinin yaşam döngüsü: başlat / durdur / native durum olayları. */
 export function useCaptureSession() {
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -12,9 +20,8 @@ export function useCaptureSession() {
     SubtitleCapture.isRunning().then(setRunning);
     const sub = SubtitleCapture.onState(e => {
       setRunning(e.running);
-      if (e.error) {
-        setError(e.error);
-      }
+      // Remote Play yeniden bağlanınca hata null gelir ve mesaj kalkar.
+      setError(e.error);
     });
     return () => sub?.remove();
   }, []);
@@ -29,7 +36,11 @@ export function useCaptureSession() {
           PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
         );
       }
-      await SubtitleCapture.start(options);
+      if (CAPTURE_SOURCE === 'remoteplay') {
+        await RemotePlay.startStreaming(options);
+      } else {
+        await SubtitleCapture.start(options);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -1,6 +1,5 @@
 package com.altyazioverlay.bridge
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.media.Image
 import android.os.SystemClock
@@ -9,10 +8,13 @@ import android.util.Log
 import com.altyazioverlay.remoteplay.RegisteredConsole
 import com.altyazioverlay.remoteplay.RemotePlayClient
 import com.altyazioverlay.remoteplay.StreamSettings
+import com.altyazioverlay.service.RemotePlayService
+import com.altyazioverlay.service.RemotePlayStore
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 import java.io.File
 import java.util.concurrent.Executors
@@ -20,8 +22,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * PS Remote Play (chiaki-ng) köprüsü — 0. aşama: eşleştirme + tek kare yakalama denemesi.
- * Eşleşen konsolun anahtarları uygulamaya özel SharedPreferences'ta saklanır.
+ * PS Remote Play (chiaki-ng) köprüsü: eşleştirme, arka planda altyazı yayını
+ * ([RemotePlayService]) ve deneme amaçlı kare yakalama.
+ * Eşleşen konsolun anahtarları [RemotePlayStore] ile uygulamaya özel depoda saklanır.
  */
 @ReactModule(name = RemotePlayModule.NAME)
 class RemotePlayModule(
@@ -30,7 +33,6 @@ class RemotePlayModule(
 
     private val client = RemotePlayClient()
     private val worker = Executors.newSingleThreadScheduledExecutor { Thread(it, "RemotePlayModule") }
-    private val prefs by lazy { reactContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
     override fun getName(): String = NAME
 
@@ -60,7 +62,7 @@ class RemotePlayModule(
         worker.execute {
             client.register(host.trim(), accountId, pinValue, object : RemotePlayClient.RegistListener {
                 override fun onRegistered(console: RegisteredConsole) {
-                    prefs.edit().putString(KEY_CONSOLE, console.toJson()).apply()
+                    RemotePlayStore.saveConsole(reactContext, console)
                     worker.execute { client.cancelRegister() }
                     promise.resolve("${console.nickname} (${console.host})")
                 }
@@ -74,10 +76,7 @@ class RemotePlayModule(
     }
 
     /**
-     * Yayını başlatır, ilk kararlı kareyi PNG olarak kaydeder ve yayını kapatır.
-     * Çözücünün ilk kareleri gri/eksik olabildiği için [WARMUP_FRAMES] kare beklenir.
-     */
-    /**
+     * Deneme: yayını açar, kararlı kareyi PNG kaydeder ([WARMUP_FRAMES] kare beklenir).
      * @param holdSeconds 0: ilk kararlı karede kapat. >0: yayını bu kadar açık tut (kol / kullanıcı
      *   davranışını denemek için); bu sürede 5 sn'de bir kare kaydedilir.
      */
@@ -147,7 +146,32 @@ class RemotePlayModule(
 
     @ReactMethod
     fun forgetConsole() {
-        prefs.edit().remove(KEY_CONSOLE).apply()
+        RemotePlayStore.forgetConsole(reactContext)
+    }
+
+    // ------------------------------------------------------------------ arka plan yayını
+
+    /**
+     * PS5 yayınından altyazı okumayı başlatır (ön plan servisi). Durum ve altyazılar
+     * SubtitleCapture olaylarıyla (onState / onText) gelir.
+     */
+    @ReactMethod
+    fun startStreaming(options: ReadableMap?, promise: Promise) {
+        if (RemotePlayStore.loadConsole(reactContext) == null) {
+            promise.reject(E_INPUT, "Önce PS5 ile eşleştirin")
+            return
+        }
+        if (client.isRunning) {
+            promise.reject(E_INPUT, "Deneme yayını sürüyor, bitmesini bekleyin")
+            return
+        }
+        RemotePlayService.start(reactContext, options.toCaptureConfig())
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun stopStreaming() {
+        RemotePlayService.stop(reactContext)
     }
 
     /** YUV karenin parlaklık (Y) düzlemini gri tonlamalı PNG olarak kaydeder. */
@@ -174,8 +198,7 @@ class RemotePlayModule(
         return file.absolutePath
     }
 
-    private fun loadConsole(): RegisteredConsole? =
-        prefs.getString(KEY_CONSOLE, null)?.let { runCatching { RegisteredConsole.fromJson(it) }.getOrNull() }
+    private fun loadConsole(): RegisteredConsole? = RemotePlayStore.loadConsole(reactContext)
 
     override fun invalidate() {
         worker.execute { client.stop() }
@@ -186,8 +209,6 @@ class RemotePlayModule(
     companion object {
         const val NAME = "RemotePlay"
         private const val TAG = "RemotePlayModule"
-        private const val PREFS = "altyazi_settings"
-        private const val KEY_CONSOLE = "rp_console"
         private const val WARMUP_FRAMES = 90
         private const val TIMEOUT_MS = 25_000L
         private const val HOLD_SAVE_INTERVAL_MS = 5_000L

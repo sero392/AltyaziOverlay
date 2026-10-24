@@ -125,7 +125,7 @@ export function HomeScreen() {
         <Button
           label={session.running ? 'Durdur' : 'Başlat'}
           onPress={onToggle}
-          disabled={!overlay.granted || session.starting}
+          disabled={session.starting}
           loading={session.starting}
           variant={session.running ? 'danger' : 'primary'}
         />

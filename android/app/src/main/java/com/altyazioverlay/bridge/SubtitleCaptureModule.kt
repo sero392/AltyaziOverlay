@@ -14,6 +14,7 @@ import com.altyazioverlay.core.SubtitleEvent
 import com.altyazioverlay.core.SubtitleEventBus
 import com.altyazioverlay.core.TvLink
 import com.altyazioverlay.service.CaptureConfig
+import com.altyazioverlay.service.RemotePlayService
 import com.altyazioverlay.service.ScreenCaptureService
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
@@ -140,14 +141,16 @@ class SubtitleCaptureModule(
         }
     }
 
+    /** Hangi kaynak çalışıyorsa (Remote Play ya da yedek ekran yakalama) onu durdurur. */
     @ReactMethod
     fun stopCapture() {
-        ScreenCaptureService.stop(reactContext)
+        if (RemotePlayService.isRunning) RemotePlayService.stop(reactContext)
+        if (ScreenCaptureService.isRunning) ScreenCaptureService.stop(reactContext)
     }
 
     @ReactMethod
     fun isCaptureRunning(promise: Promise) {
-        promise.resolve(ScreenCaptureService.isRunning)
+        promise.resolve(ScreenCaptureService.isRunning || RemotePlayService.isRunning)
     }
 
     /** JS -> yüzen pencere. Boş string pencereyi gizler. */
@@ -321,26 +324,6 @@ class SubtitleCaptureModule(
         reactContext.emitDeviceEvent(name, payload)
     }
 
-    private fun ReadableMap?.toCaptureConfig(): CaptureConfig {
-        val d = CaptureConfig()
-        if (this == null) return d
-        val map = this
-        fun num(key: String) = if (map.hasKey(key) && !map.isNull(key)) map.getDouble(key) else null
-        val raw = CaptureConfig(
-            intervalMs = num("intervalMs")?.toLong() ?: d.intervalMs,
-            cropRatio = num("cropRatio")?.toFloat() ?: d.cropRatio,
-            maxCaptureWidth = num("maxCaptureWidth")?.toInt() ?: d.maxCaptureWidth,
-            stableFrames = num("stableFrames")?.toInt() ?: d.stableFrames,
-            similarityThreshold = num("similarityThreshold")?.toFloat() ?: d.similarityThreshold,
-            landscapeOnly = if (map.hasKey("landscapeOnly") && !map.isNull("landscapeOnly")) {
-                map.getBoolean("landscapeOnly")
-            } else {
-                d.landscapeOnly
-            },
-        )
-        // fromBundle sınırları (coerceIn) uygular.
-        return CaptureConfig.fromBundle(raw.toBundle())
-    }
 
     companion object {
         const val NAME = "SubtitleCapture"

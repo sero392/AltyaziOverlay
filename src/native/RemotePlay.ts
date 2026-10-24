@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import type { CaptureOptions } from './SubtitleCapture';
 
 interface RemotePlayNative {
   getConsole(): Promise<string | null>;
@@ -9,6 +10,8 @@ interface RemotePlayNative {
   ): Promise<string>;
   captureTestFrame(holdSeconds: number): Promise<string>;
   forgetConsole(): void;
+  startStreaming(options: CaptureOptions | null): Promise<boolean>;
+  stopStreaming(): void;
 }
 
 const Native: RemotePlayNative | undefined =
@@ -33,4 +36,13 @@ export const RemotePlay = {
     Native ? Native.captureTestFrame(holdSeconds) : missing(),
 
   forgetConsole: (): void => Native?.forgetConsole(),
+
+  /**
+   * PS5 yayınından arka planda altyazı okumayı başlatır. Durum ve altyazılar
+   * SubtitleCapture.onState / onText ile gelir; durdurmak için SubtitleCapture.stop().
+   */
+  startStreaming: (options?: CaptureOptions): Promise<boolean> =>
+    Native ? Native.startStreaming(options ?? null) : missing(),
+
+  stopStreaming: (): void => Native?.stopStreaming(),
 };
