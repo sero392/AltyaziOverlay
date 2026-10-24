@@ -80,6 +80,9 @@ interface SubtitleCaptureNative {
   tvDisconnect(): void;
   setDisplayTargets(phone: boolean, tv: boolean): void;
   setSubtitleStyle(json: string): void;
+  mlkitTranslate(text: string): Promise<string>;
+  mlkitModelDownloaded(): Promise<boolean>;
+  mlkitDownloadModel(): Promise<boolean>;
   setSetting(key: string, value: string | null): Promise<void>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -153,6 +156,20 @@ export const SubtitleCapture = {
   /** Altyazı görünümünü kaydeder; telefondaki pencereye ve TV'ye hemen uygulanır. */
   setSubtitleStyle: (style: SubtitleStyle): void =>
     Native?.setSubtitleStyle(JSON.stringify(style)),
+
+  /** ML Kit on-device EN -> TR çeviri. Dil modeli yoksa önce indirilir (~30 MB). */
+  mlkitTranslate: (text: string): Promise<string> =>
+    Native
+      ? Native.mlkitTranslate(text)
+      : Promise.reject(new Error('SubtitleCapture native module yok')),
+
+  mlkitModelDownloaded: (): Promise<boolean> =>
+    Native ? Native.mlkitModelDownloaded() : Promise.resolve(false),
+
+  mlkitDownloadModel: (): Promise<boolean> =>
+    Native
+      ? Native.mlkitDownloadModel()
+      : Promise.reject(new Error('SubtitleCapture native module yok')),
 
   onTvState(listener: (e: TvStateEvent) => void): EmitterSubscription | null {
     return (

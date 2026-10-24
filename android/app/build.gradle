@@ -120,6 +120,8 @@ dependencies {
 
     // On-device OCR (Latin, model APK içinde paketli -> ilk çalıştırmada indirme yok)
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // On-device çeviri (EN -> TR). Dil modeli (~30 MB) ilk kullanımda indirilir.
+    implementation("com.google.mlkit:translate:17.0.3")
     // PS Remote Play istemcisi (chiaki-ng çekirdeği + MediaCodec)
     implementation(project(":remoteplay"))
     implementation("androidx.core:core-ktx:1.16.0")

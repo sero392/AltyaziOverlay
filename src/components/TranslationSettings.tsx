@@ -8,6 +8,10 @@ import {
   View,
 } from 'react-native';
 import { maskKey } from '../hooks/useDeepLKey';
+import {
+  TranslationEngine,
+  useTranslationEngine,
+} from '../hooks/useTranslationEngine';
 import { DeepLTranslationService } from '../services/translation/DeepLTranslationService';
 
 interface Props {
@@ -15,12 +19,32 @@ interface Props {
   deepl: DeepLTranslationService | null;
   onSave: (key: string) => Promise<void>;
   onClear: () => Promise<void>;
+  /** Verilirse motor seçimi (Otomatik / DeepL / ML Kit) ve ML Kit model durumu gösterilir. */
+  engine?: ReturnType<typeof useTranslationEngine>;
 }
 
 const TEST_SENTENCE = 'Are you ready with that bow?';
 
-/** DeepL anahtarı girişi, bağlantı testi ve aylık kota görüntüleme. */
-export function TranslationSettings({ apiKey, deepl, onSave, onClear }: Props) {
+const ENGINE_OPTIONS: { value: TranslationEngine; label: string }[] = [
+  { value: 'auto', label: 'Otomatik' },
+  { value: 'deepl', label: 'DeepL' },
+  { value: 'mlkit', label: 'ML Kit' },
+];
+
+const ENGINE_HINT: Record<TranslationEngine, string> = {
+  auto: 'DeepL anahtarı varsa DeepL; kota dolunca ya da hata olunca ücretsiz Google ML Kit.',
+  deepl: 'Sadece DeepL. Kota dolarsa çeviri durur.',
+  mlkit: 'Sadece Google ML Kit: ücretsiz, telefonda çalışır, kalitesi DeepL’den düşük.',
+};
+
+/** Çeviri motoru seçimi, DeepL anahtarı girişi, bağlantı testi ve aylık kota görüntüleme. */
+export function TranslationSettings({
+  apiKey,
+  deepl,
+  onSave,
+  onClear,
+  engine,
+}: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(
@@ -66,11 +90,56 @@ export function TranslationSettings({ apiKey, deepl, onSave, onClear }: Props) {
   return (
     <View style={styles.card}>
       <Text style={styles.heading}>Çeviri servisi</Text>
-      <Text style={styles.provider}>
-        {apiKey ? `DeepL · ${maskKey(apiKey)}` : 'Sahte servis (test sözlüğü)'}
-      </Text>
 
-      {apiKey ? (
+      {engine ? (
+        <>
+          <View style={styles.row}>
+            {ENGINE_OPTIONS.map(o => (
+              <Pressable
+                key={o.value}
+                onPress={() => engine.setEngine(o.value)}
+                style={[
+                  styles.segment,
+                  engine.engine === o.value && styles.segmentActive,
+                ]}
+              >
+                <Text style={styles.buttonText}>{o.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.provider}>{ENGINE_HINT[engine.engine]}</Text>
+
+          {engine.engine !== 'deepl' ? (
+            <View style={styles.row}>
+              <Text style={[styles.provider, styles.flex]}>
+                {engine.modelReady
+                  ? 'ML Kit Türkçe modeli: indirildi'
+                  : engine.modelReady === false
+                  ? 'ML Kit Türkçe modeli: indirilmedi (~30 MB)'
+                  : 'ML Kit Türkçe modeli: kontrol ediliyor…'}
+              </Text>
+              {engine.modelReady === false ? (
+                <SmallButton
+                  label={engine.downloading ? 'İndiriliyor…' : 'Modeli indir'}
+                  onPress={engine.downloadModel}
+                  disabled={engine.downloading}
+                />
+              ) : null}
+            </View>
+          ) : null}
+          {engine.downloadError ? (
+            <Text style={styles.error}>{engine.downloadError}</Text>
+          ) : null}
+        </>
+      ) : null}
+
+      {engine?.engine !== 'mlkit' ? (
+        <Text style={styles.provider}>
+          {apiKey ? `DeepL · ${maskKey(apiKey)}` : 'DeepL anahtarı girilmedi'}
+        </Text>
+      ) : null}
+
+      {engine?.engine === 'mlkit' ? null : apiKey ? (
         <View style={styles.row}>
           <SmallButton
             label="Bağlantıyı test et"
@@ -148,7 +217,16 @@ const styles = StyleSheet.create({
   },
   heading: { color: '#fff', fontWeight: '700', fontSize: 16 },
   provider: { color: '#94a3b8' },
-  row: { flexDirection: 'row', gap: 8 },
+  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  flex: { flex: 1 },
+  segment: {
+    flex: 1,
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  segmentActive: { backgroundColor: '#2563eb' },
   input: {
     backgroundColor: '#0b0f17',
     color: '#fff',

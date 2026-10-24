@@ -17,6 +17,7 @@ import com.altyazioverlay.core.TvLink
 import com.altyazioverlay.service.CaptureConfig
 import com.altyazioverlay.service.RemotePlayService
 import com.altyazioverlay.service.ScreenCaptureService
+import com.altyazioverlay.translate.MlKitTranslator
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
@@ -211,6 +212,34 @@ class SubtitleCaptureModule(
         })
     }
 
+    // ------------------------------------------------------------------ ML Kit çeviri
+
+    /** On-device EN -> TR çeviri. Dil modeli yoksa önce indirilir. */
+    @ReactMethod
+    fun mlkitTranslate(text: String, promise: Promise) {
+        MlKitTranslator.translate(
+            text,
+            onResult = { promise.resolve(it) },
+            onError = { promise.reject(E_MLKIT, it.message ?: "ML Kit çeviri hatası", it) },
+        )
+    }
+
+    @ReactMethod
+    fun mlkitModelDownloaded(promise: Promise) {
+        MlKitTranslator.isModelDownloaded(
+            onResult = { promise.resolve(it) },
+            onError = { promise.reject(E_MLKIT, it.message ?: "ML Kit model durumu alınamadı", it) },
+        )
+    }
+
+    @ReactMethod
+    fun mlkitDownloadModel(promise: Promise) {
+        MlKitTranslator.download(
+            onDone = { promise.resolve(true) },
+            onError = { promise.reject(E_MLKIT, it.message ?: "ML Kit modeli indirilemedi", it) },
+        )
+    }
+
     // ------------------------------------------------------------------ http
 
     /**
@@ -344,6 +373,7 @@ class SubtitleCaptureModule(
         private const val REQUEST_MEDIA_PROJECTION = 0x5C1
         private const val PREFS_NAME = "altyazi_settings"
         private const val E_HTTP = "E_HTTP"
+        private const val E_MLKIT = "E_MLKIT"
 
         /** RN'nin paylaşılan OkHttp istemcisi (bağlantı havuzu ortak). */
         private val httpClient: OkHttpClient by lazy { OkHttpClientProvider.getOkHttpClient() }
