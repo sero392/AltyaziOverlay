@@ -45,14 +45,12 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
         }
 
         val tv = TextView(appContext).apply {
-            setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setShadowLayer(8f, 0f, 0f, Color.BLACK)
             setPadding(dp(28), dp(12), dp(28), dp(12))
             background = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
-                setColor(Color.argb(190, 0, 0, 0))
             }
             maxLines = 3
             visibility = View.GONE
@@ -90,11 +88,14 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
         }
     }
 
-    /** Konum / yazı boyutu ayarı değişince çağrılır. */
-    fun applySettings() {
-        val tv = textView ?: return
-        val lp = params ?: return
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.textSize.sp)
+    /** Konum ya da telefondan gelen stil değişince çağrılır. Herhangi bir thread'den çağrılabilir. */
+    fun applySettings() = mainHandler.post {
+        val tv = textView ?: return@post
+        val lp = params ?: return@post
+        val style = settings.style
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, style.fontSize)
+        tv.setTextColor(style.textColor)
+        (tv.background as? GradientDrawable)?.setColor(style.bgColor)
         val screenHeight = appContext.resources.displayMetrics.heightPixels
         when (settings.position) {
             TvSettings.Position.BOTTOM -> {

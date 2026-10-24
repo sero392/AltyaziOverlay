@@ -36,6 +36,18 @@ export interface TvStateEvent {
   error: string | null;
 }
 
+/** Native SubtitleStyle ile birebir. */
+export interface SubtitleStyle {
+  /** TV'deki yazı boyutu (sp). Telefon penceresi bunun 2/3'ünü kullanır. */
+  fontSize: number;
+  /** "#RRGGBB" */
+  textColor: string;
+  /** "#RRGGBB" */
+  bgColor: string;
+  /** Arka plan opaklığı, 0-100. */
+  bgOpacity: number;
+}
+
 export interface CaptureStateEvent {
   running: boolean;
   error: string | null;
@@ -67,6 +79,7 @@ interface SubtitleCaptureNative {
   tvConnect(host: string | null): void;
   tvDisconnect(): void;
   setDisplayTargets(phone: boolean, tv: boolean): void;
+  setSubtitleStyle(json: string): void;
   setSetting(key: string, value: string | null): Promise<void>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -136,6 +149,10 @@ export const SubtitleCapture = {
   /** Çeviri telefondaki pencerede ve/veya TV'de gösterilsin. */
   setDisplayTargets: (phone: boolean, tv: boolean): void =>
     Native?.setDisplayTargets(phone, tv),
+
+  /** Altyazı görünümünü kaydeder; telefondaki pencereye ve TV'ye hemen uygulanır. */
+  setSubtitleStyle: (style: SubtitleStyle): void =>
+    Native?.setSubtitleStyle(JSON.stringify(style)),
 
   onTvState(listener: (e: TvStateEvent) => void): EmitterSubscription | null {
     return (

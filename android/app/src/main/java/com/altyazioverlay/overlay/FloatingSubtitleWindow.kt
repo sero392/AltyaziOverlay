@@ -18,6 +18,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
+import com.altyazioverlay.core.SubtitleStyle
 
 /**
  * Diğer uygulamaların (Chiaki vb.) üzerinde duran, dokunmaları tamamen alttaki uygulamaya
@@ -127,6 +128,14 @@ class FloatingSubtitleWindow(
         }
     }
 
+    /** Yazı boyutu / renkleri. Telefon ekranı yakın olduğu için TV boyutunun 2/3'ü kullanılır. */
+    fun applyStyle(style: SubtitleStyle) = runOnMain {
+        val tv = textView ?: return@runOnMain
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, style.fontSize * PHONE_SIZE_RATIO)
+        tv.setTextColor(style.textColorInt)
+        (tv.background as? GradientDrawable)?.setColor(style.bgColorInt)
+    }
+
     /** Ekran dönünce konum yeniden hesaplanır. */
     fun relayout() = runOnMain {
         val root = container ?: return@runOnMain
@@ -168,5 +177,6 @@ class FloatingSubtitleWindow(
         private const val TAG = "FloatingSubtitleWindow"
         /** InputManager.getMaximumObscuringOpacityForTouch() varsayılanı (Android 12+). */
         private const val MAX_PASSTHROUGH_ALPHA = 0.8f
+        private const val PHONE_SIZE_RATIO = 2f / 3f
     }
 }

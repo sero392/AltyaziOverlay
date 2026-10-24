@@ -12,6 +12,7 @@ import com.altyazioverlay.core.CaptureGate
 import com.altyazioverlay.core.OverlayController
 import com.altyazioverlay.core.SubtitleEvent
 import com.altyazioverlay.core.SubtitleEventBus
+import com.altyazioverlay.core.SubtitleStyle
 import com.altyazioverlay.core.TvLink
 import com.altyazioverlay.service.CaptureConfig
 import com.altyazioverlay.service.RemotePlayService
@@ -65,6 +66,7 @@ class SubtitleCaptureModule(
         reactContext.addLifecycleEventListener(this)
         SubtitleEventBus.register(this)
         TvLink.addListener(tvListener)
+        SubtitleStyle.load(reactContext)
     }
 
     override fun invalidate() {
@@ -191,6 +193,14 @@ class SubtitleCaptureModule(
     fun setDisplayTargets(phone: Boolean, tv: Boolean) {
         OverlayController.showOnPhone = phone
         OverlayController.sendToTv = tv
+    }
+
+    /** Altyazı görünümünü kaydeder ve telefondaki pencere + TV'ye hemen uygular. */
+    @ReactMethod
+    fun setSubtitleStyle(json: String) {
+        val style = SubtitleStyle.fromJson(json)
+        prefs.edit().putString(SubtitleStyle.PREF_KEY, style.toJson().toString()).apply()
+        OverlayController.setStyle(style)
     }
 
     private val tvListener = TvLink.Listener { s ->

@@ -99,6 +99,11 @@ object TvLink {
         }
     }
 
+    /** Altyazı görünümünü TV'ye yollar. Bağlı değilse bağlanınca [SubtitleStyle.current] gider. */
+    fun sendStyle(style: SubtitleStyle) {
+        executor?.execute { send(style.toJson().put("t", "style")) }
+    }
+
     // ------------------------------------------------------------------ connection (executor thread)
 
     private fun connectOrDiscover() {
@@ -117,6 +122,7 @@ object TvLink {
             setStatus(State.CONNECTED, host, null)
             Log.i(TAG, "Connected to TV $host")
             send(JSONObject().put("t", "hello").put("name", "${Build.MANUFACTURER} ${Build.MODEL}"))
+            send(SubtitleStyle.current.toJson().put("t", "style"))
             // Bağlantı yeniden kurulduysa ekrandaki altyazıyı tazele.
             if (lastText.isNotEmpty()) send(JSONObject().put("t", "sub").put("text", lastText))
         } catch (e: Exception) {

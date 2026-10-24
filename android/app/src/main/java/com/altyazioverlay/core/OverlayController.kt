@@ -31,6 +31,14 @@ object OverlayController {
 
     fun attach(window: FloatingSubtitleWindow) {
         this.window = window
+        window.applyStyle(SubtitleStyle.current)
+    }
+
+    /** Yeni görünümü telefondaki pencereye ve TV'ye uygular. */
+    fun setStyle(style: SubtitleStyle) {
+        SubtitleStyle.current = style
+        window?.applyStyle(style)
+        TvLink.sendStyle(style)
     }
 
     fun detach(window: FloatingSubtitleWindow) {

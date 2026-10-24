@@ -145,6 +145,10 @@ class ReceiverService : Service() {
                 overlay.show(text)
                 updateStatus { it.copy(lastText = text) }
             }
+            "style" -> {
+                settings.saveStyle(msg)
+                overlay.applySettings()
+            }
             "hello" -> updateStatus { it.copy(clientName = msg.optString("name").ifBlank { it.clientName }) }
             "ping" -> Unit
         }

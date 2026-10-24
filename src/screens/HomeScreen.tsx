@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ConsoleCard } from '../components/ConsoleCard';
+import { SubtitleStyleCard } from '../components/SubtitleStyleCard';
 import { TranslationSettings } from '../components/TranslationSettings';
 import { TvSettingsCard } from '../components/TvSettingsCard';
 import { Button, Card, Para, colors } from '../components/ui';
@@ -10,6 +11,7 @@ import { useCaptureSession } from '../hooks/useCaptureSession';
 import { useDeepLKey } from '../hooks/useDeepLKey';
 import { DEFAULT_OCR_SETTINGS } from '../hooks/useOcrSettings';
 import { useOverlayPermission } from '../hooks/useOverlayPermission';
+import { useSubtitleStyle } from '../hooks/useSubtitleStyle';
 import { useSubtitleTranslator } from '../hooks/useSubtitleTranslator';
 import { useTvLink } from '../hooks/useTvLink';
 import { SubtitleCapture } from '../native/SubtitleCapture';
@@ -45,6 +47,7 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const tv = useTvLink();
   const overlay = useOverlayPermission();
   const session = useCaptureSession();
+  const subtitleStyle = useSubtitleStyle();
   const { history, clearHistory } = useSubtitleTranslator(translator);
 
   const onToggle = () => {
@@ -111,6 +114,12 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
           onChange={tv.update}
         />
       ) : null}
+
+      <SubtitleStyleCard
+        style={subtitleStyle.style}
+        onChange={subtitleStyle.update}
+        onReset={subtitleStyle.reset}
+      />
 
       <View style={styles.historyHeader}>
         <Text style={styles.label}>Son altyazılar</Text>

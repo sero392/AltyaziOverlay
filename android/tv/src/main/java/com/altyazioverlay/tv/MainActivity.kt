@@ -24,7 +24,6 @@ class MainActivity : Activity() {
     private lateinit var settings: TvSettings
     private lateinit var statusView: TextView
     private lateinit var positionButton: Button
-    private lateinit var sizeButton: Button
     private lateinit var permissionButton: Button
     private var permissionScreenMissing = false
 
@@ -41,6 +40,7 @@ class MainActivity : Activity() {
         }
         root.addView(text("Altyazı TV", 34f, bold = true))
         root.addView(text("Telefondaki Altyazı Çevirmeni'nden gelen Türkçe çeviriyi oyunun üstünde gösterir.", 18f, "#94A3B8"))
+        root.addView(text("Yazı boyutu ve renkleri telefondaki \"Altyazı görünümü\" bölümünden ayarlanır.", 16f, "#64748B"))
 
         statusView = text("", 20f).apply { setPadding(0, dp(24), 0, dp(24)) }
         root.addView(statusView)
@@ -51,15 +51,9 @@ class MainActivity : Activity() {
             settings.position = values[(settings.position.ordinal + 1) % values.size]
             onSettingsChanged()
         }
-        sizeButton = button("") {
-            val values = TvSettings.TextSize.entries
-            settings.textSize = values[(settings.textSize.ordinal + 1) % values.size]
-            onSettingsChanged()
-        }
         permissionButton = button("Ekran üstü iznini ver") { openOverlaySettings() }
         buttons.addView(permissionButton)
         buttons.addView(positionButton)
-        buttons.addView(sizeButton)
         buttons.addView(button("Test yazısı göster") {
             ReceiverService.instance?.showTest("Bu bir deneme altyazısıdır. Dikkat et, arkanda biri var!")
         })
@@ -108,12 +102,11 @@ class MainActivity : Activity() {
     private fun onSettingsChanged() {
         updateButtonLabels()
         ReceiverService.instance?.applySettings()
-        ReceiverService.instance?.showTest("Konum ve yazı boyutu önizlemesi")
+        ReceiverService.instance?.showTest("Konum önizlemesi")
     }
 
     private fun updateButtonLabels() {
         positionButton.text = "Konum: ${settings.position.label}"
-        sizeButton.text = "Yazı: ${settings.textSize.label}"
     }
 
     private fun render(s: ReceiverService.Status) {

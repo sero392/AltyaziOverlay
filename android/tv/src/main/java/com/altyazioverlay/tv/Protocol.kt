@@ -6,6 +6,7 @@ package com.altyazioverlay.tv
  * TCP üzerinden satır satır JSON (UTF-8, her mesaj "\n" ile biter):
  *   {"t":"hello","name":"Redmi Note 10S"}
  *   {"t":"sub","text":"Dikkat et!"}      // boş text = altyazıyı gizle
+ *   {"t":"style","fontSize":30,"textColor":"#FFFFFF","bgColor":"#000000","bgOpacity":75}
  *   {"t":"ping"}                          // bağlantı canlı tutma
  */
 object Protocol {
