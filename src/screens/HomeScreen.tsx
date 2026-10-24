@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ConsoleCard } from '../components/ConsoleCard';
+import { ProtectedTermsCard } from '../components/ProtectedTermsCard';
 import { SubtitleStyleCard } from '../components/SubtitleStyleCard';
 import { TranslationSettings } from '../components/TranslationSettings';
 import { TvSettingsCard } from '../components/TvSettingsCard';
@@ -11,6 +12,7 @@ import { useCaptureSession } from '../hooks/useCaptureSession';
 import { useDeepLKey } from '../hooks/useDeepLKey';
 import { DEFAULT_OCR_SETTINGS } from '../hooks/useOcrSettings';
 import { useOverlayPermission } from '../hooks/useOverlayPermission';
+import { useProtectedTerms } from '../hooks/useProtectedTerms';
 import { useSubtitleStyle } from '../hooks/useSubtitleStyle';
 import { useSubtitleTranslator } from '../hooks/useSubtitleTranslator';
 import {
@@ -31,20 +33,26 @@ import { TranslationService } from '../services/translation/TranslationService';
  */
 export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const deeplKey = useDeepLKey();
+  const protectedTerms = useProtectedTerms();
   const deepl = useMemo(
     () =>
       deeplKey.apiKey
         ? new DeepLTranslationService(
             deeplKey.apiKey,
             SubtitleCapture.httpRequest,
+            protectedTerms.terms,
           )
         : null,
-    [deeplKey.apiKey],
+    [deeplKey.apiKey, protectedTerms.terms],
   );
   const engine = useTranslationEngine();
   const mlkit = useMemo(
-    () => new MlKitTranslationService(SubtitleCapture.mlkitTranslate),
-    [],
+    () =>
+      new MlKitTranslationService(
+        SubtitleCapture.mlkitTranslate,
+        protectedTerms.terms,
+      ),
+    [protectedTerms.terms],
   );
   // Otomatik modda DeepL kotası dolunca / anahtar geçersizse ML Kit'e geçilir; neden burada tutulur.
   const [deeplOffReason, setDeeplOffReason] = useState<string | null>(null);
@@ -135,6 +143,13 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
         onSave={deeplKey.save}
         onClear={deeplKey.clear}
         engine={engine}
+      />
+
+      <ProtectedTermsCard
+        terms={protectedTerms.terms}
+        onAdd={protectedTerms.add}
+        onRemove={protectedTerms.remove}
+        onReset={protectedTerms.reset}
       />
 
       {tv.settings ? (

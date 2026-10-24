@@ -3,6 +3,7 @@ import {
   TranslationResult,
   TranslationService,
 } from './TranslationService';
+import { protectWithPlaceholders } from './protectedTerms';
 
 /**
  * Google ML Kit on-device çeviri (EN -> TR). Ücretsiz, kota yok, internet gerekmez
@@ -11,7 +12,11 @@ import {
  * Çağrı native tarafta yapılır; uygulama arka plandayken de çalışır.
  */
 export class MlKitTranslationService implements TranslationService {
-  constructor(private readonly native: (text: string) => Promise<string>) {}
+  constructor(
+    private readonly native: (text: string) => Promise<string>,
+    /** Çevrilmeyecek kelimeler (karakter / yer adları). */
+    private readonly protectedTerms: string[] = [],
+  ) {}
 
   async translate(
     text: string,
@@ -20,9 +25,10 @@ export class MlKitTranslationService implements TranslationService {
     if (signal?.aborted) {
       throw new AbortError();
     }
+    const prot = protectWithPlaceholders(text, this.protectedTerms);
     let translated: string;
     try {
-      translated = await this.native(text);
+      translated = prot.restore(await this.native(prot.text));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`ML Kit: ${msg}`);

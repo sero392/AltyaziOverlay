@@ -1,4 +1,5 @@
 import type { HttpRequest, HttpResponse } from '../../native/SubtitleCapture';
+import { protectForDeepL } from './protectedTerms';
 import {
   AbortError,
   TranslationResult,
@@ -48,6 +49,8 @@ export class DeepLTranslationService implements TranslationService {
   constructor(
     private readonly apiKey: string,
     private readonly http: (req: HttpRequest) => Promise<HttpResponse>,
+    /** Çevrilmeyecek kelimeler (karakter / yer adları). */
+    private readonly protectedTerms: string[] = [],
     private readonly timeoutMs = 5000,
   ) {
     this.baseUrl = apiKey.trim().endsWith(':fx')
@@ -59,11 +62,16 @@ export class DeepLTranslationService implements TranslationService {
     text: string,
     signal?: AbortSignal,
   ): Promise<TranslationResult> {
+    const prot = protectForDeepL(text, this.protectedTerms);
     const body: Record<string, unknown> = {
-      text: [text],
+      text: [prot.text],
       source_lang: 'EN',
       target_lang: 'TR',
     };
+    if (prot.text !== text) {
+      body.tag_handling = 'xml';
+      body.ignore_tags = ['keep'];
+    }
     if (this.previousText) {
       body.context = this.previousText;
     }
@@ -74,7 +82,7 @@ export class DeepLTranslationService implements TranslationService {
       throw new Error('DeepL: beklenmeyen yanıt');
     }
     this.previousText = text;
-    return { text: translated, fromCache: false };
+    return { text: prot.restore(translated), fromCache: false };
   }
 
   async usage(): Promise<DeepLUsage> {
