@@ -45,7 +45,7 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const tv = useTvLink();
   const overlay = useOverlayPermission();
   const session = useCaptureSession();
-  const { history, stats, clearHistory } = useSubtitleTranslator(translator);
+  const { history, clearHistory } = useSubtitleTranslator(translator);
 
   const onToggle = () => {
     if (session.running) {
@@ -112,13 +112,6 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
         />
       ) : null}
 
-      <View style={styles.statsRow}>
-        <Stat label="Gelen" value={stats.received} />
-        <Stat label="Çevrilen" value={stats.translated} />
-        <Stat label="Önbellek" value={stats.cacheHits} />
-        <Stat label="İptal" value={stats.dropped} />
-      </View>
-
       <View style={styles.historyHeader}>
         <Text style={styles.label}>Son altyazılar</Text>
         <Pressable onPress={clearHistory}>
@@ -174,30 +167,11 @@ const HistoryItem = React.memo(({ item }: { item: SubtitleEntry }) => (
   </View>
 ));
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16 },
   title: { color: colors.text, fontSize: 24, fontWeight: '700', marginTop: 12 },
   subtitle: { color: colors.muted, marginTop: 4 },
   label: { color: colors.muted, fontSize: 13, marginTop: 4 },
-  statsRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
-  stat: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  statValue: { color: colors.text, fontSize: 18, fontWeight: '700' },
-  statLabel: { color: colors.muted, fontSize: 12 },
   historyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
