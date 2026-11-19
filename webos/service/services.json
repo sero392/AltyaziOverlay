@@ -1,0 +1,10 @@
+{
+  "id": "com.altyazioverlay.tv.service",
+  "description": "Altyazı TV alıcı servisi",
+  "services": [
+    {
+      "name": "com.altyazioverlay.tv.service",
+      "description": "Telefon / bilgisayardan gelen çevirileri dinler"
+    }
+  ]
+}

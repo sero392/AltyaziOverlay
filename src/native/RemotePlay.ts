@@ -1,5 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
-import type { CaptureOptions } from './SubtitleCapture';
+import type { CaptureOptions, ReadRegion } from './SubtitleCapture';
 
 export type ConsoleState = 'READY' | 'STANDBY' | 'UNKNOWN';
 
@@ -11,6 +11,14 @@ export interface DiscoveredConsole {
   ps5: boolean;
   /** Bu uygulamayla eşleşmiş konsol mu? */
   paired: boolean;
+}
+
+/** Okuma alanı kurulumu için yayından alınan kare. */
+export interface FrameSnapshot {
+  /** file:// adresi (önbellek kırıcı sorgu ile). */
+  uri: string;
+  width: number;
+  height: number;
 }
 
 /** Eşleşmiş konsol ve anlık durumu (OFFLINE = ağda yanıt yok). */
@@ -34,6 +42,8 @@ interface RemotePlayNative {
   forgetConsole(): void;
   startStreaming(options: CaptureOptions | null): Promise<boolean>;
   stopStreaming(): void;
+  captureSnapshot(): Promise<FrameSnapshot>;
+  setReadRegions(regions: ReadRegion[]): void;
 }
 
 const Native: RemotePlayNative | undefined =
@@ -73,6 +83,17 @@ export const RemotePlay = {
     Native ? Native.captureTestFrame(holdSeconds) : missing(),
 
   forgetConsole: (): void => Native?.forgetConsole(),
+
+  /**
+   * Okuma alanlarını seçmek için yayından bir kare. Okuma sürüyorsa o yayından alınır,
+   * sürmüyorsa kısa bir yayın açılıp kapatılır (birkaç saniye).
+   */
+  captureSnapshot: (): Promise<FrameSnapshot> =>
+    Native ? Native.captureSnapshot() : missing(),
+
+  /** Okuma sürüyorsa yeni alanları hemen uygular. */
+  setReadRegions: (regions: ReadRegion[]): void =>
+    Native?.setReadRegions(regions),
 
   /**
    * PS5 yayınından arka planda altyazı okumayı başlatır. Durum ve altyazılar

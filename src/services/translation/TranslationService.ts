@@ -1,6 +1,8 @@
 export interface TranslationResult {
   text: string;
   fromCache: boolean;
+  /** Çeviriyi yapan motor (geçmişte ve log'da gösterilir). */
+  engine?: string;
 }
 
 /**

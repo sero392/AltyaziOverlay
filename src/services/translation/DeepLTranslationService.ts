@@ -82,7 +82,7 @@ export class DeepLTranslationService implements TranslationService {
       throw new Error('DeepL: beklenmeyen yanıt');
     }
     this.previousText = text;
-    return { text: prot.restore(translated), fromCache: false };
+    return { text: prot.restore(translated), fromCache: false, engine: 'DeepL' };
   }
 
   async usage(): Promise<DeepLUsage> {

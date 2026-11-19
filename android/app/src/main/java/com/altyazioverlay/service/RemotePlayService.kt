@@ -91,7 +91,7 @@ class RemotePlayService : Service() {
         acquireLocks()
 
         if (Settings.canDrawOverlays(this)) {
-            overlay = FloatingSubtitleWindow(applicationContext, config.cropRatio).also {
+            overlay = FloatingSubtitleWindow(applicationContext, config.overlayBottomRatio).also {
                 it.attach()
                 OverlayController.attach(it)
             }
@@ -100,12 +100,13 @@ class RemotePlayService : Service() {
         val source = RemotePlayFrameSource(config)
         val pipe = SubtitlePipeline(
             config = config,
-            recognizer = TextRecognizerEngine(source.callbackExecutor, config.cropRatio),
+            recognizer = TextRecognizerEngine(source.callbackExecutor),
             onSubtitle = SubtitleEventBus::publishSubtitle,
             debugDir = if (isDebuggable()) getExternalFilesDir("debug") else null,
         )
         source.start(pipe)
         frameSource = source
+        activeSource = source
         pipeline = pipe
 
         isRunning = true
@@ -187,6 +188,7 @@ class RemotePlayService : Service() {
             pipeline?.close()
         }
         workerThread.quitSafely()
+        activeSource = null
         frameSource = null
         pipeline = null
         overlay?.let {
@@ -284,6 +286,11 @@ class RemotePlayService : Service() {
 
         @Volatile
         var isRunning: Boolean = false
+            private set
+
+        /** Çalışan yayının kare kaynağı: okuma alanı kurulumu (anlık kare, canlı alan değişikliği). */
+        @Volatile
+        var activeSource: RemotePlayFrameSource? = null
             private set
 
         fun start(context: Context, config: CaptureConfig) {

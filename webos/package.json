@@ -1,0 +1,15 @@
+{
+  "name": "altyazi-webos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Altyazı TV - LG webOS alıcısı (HDMI görüntüsü + çeviri)",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "icons": "node scripts/build-icons.mjs",
+    "package": "node scripts/build-icons.mjs && ares-package app service --no-minify -o out",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@webos-tools/cli": "^3.2.6"
+  }
+}

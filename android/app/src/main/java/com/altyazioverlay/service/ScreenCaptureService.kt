@@ -102,7 +102,7 @@ class ScreenCaptureService : Service() {
             projection = mp
 
             // 3) Yüzen pencere (ana thread'de eklenir).
-            val window = FloatingSubtitleWindow(applicationContext, config.cropRatio)
+            val window = FloatingSubtitleWindow(applicationContext, config.overlayBottomRatio)
             window.attach()
             OverlayController.attach(window)
             overlay = window
@@ -111,7 +111,7 @@ class ScreenCaptureService : Service() {
             val manager = ScreenCaptureManager(applicationContext, mp, config)
             val pipe = SubtitlePipeline(
                 config = config,
-                recognizer = TextRecognizerEngine(manager.callbackExecutor, config.cropRatio),
+                recognizer = TextRecognizerEngine(manager.callbackExecutor),
                 onSubtitle = SubtitleEventBus::publishSubtitle,
                 debugDir = if (isDebuggable()) getExternalFilesDir("debug") else null,
             )

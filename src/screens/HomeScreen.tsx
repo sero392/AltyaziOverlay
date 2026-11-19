@@ -1,18 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ConsoleCard } from '../components/ConsoleCard';
-import { ProtectedTermsCard } from '../components/ProtectedTermsCard';
-import { SubtitleStyleCard } from '../components/SubtitleStyleCard';
-import { TranslationSettings } from '../components/TranslationSettings';
-import { TvSettingsCard } from '../components/TvSettingsCard';
-import { Button, Card, Para, colors } from '../components/ui';
-import { SubtitleEntry } from '../domain/types';
+import { TabBar, TabItem } from '../components/TabBar';
+import { colors } from '../components/ui';
 import { useCaptureSession } from '../hooks/useCaptureSession';
 import { useDeepLKey } from '../hooks/useDeepLKey';
 import { DEFAULT_OCR_SETTINGS } from '../hooks/useOcrSettings';
 import { useOverlayPermission } from '../hooks/useOverlayPermission';
 import { useProtectedTerms } from '../hooks/useProtectedTerms';
+import { isDefaultRegions, useReadRegions } from '../hooks/useReadRegions';
 import { useSubtitleStyle } from '../hooks/useSubtitleStyle';
 import { useSubtitleTranslator } from '../hooks/useSubtitleTranslator';
 import {
@@ -26,12 +22,35 @@ import { DeepLTranslationService } from '../services/translation/DeepLTranslatio
 import { FallbackTranslationService } from '../services/translation/FallbackTranslationService';
 import { MlKitTranslationService } from '../services/translation/MlKitTranslationService';
 import { TranslationService } from '../services/translation/TranslationService';
+import { AppearanceTab } from './tabs/AppearanceTab';
+import { RegionSetupScreen } from './RegionSetupScreen';
+import { DevicesTab } from './tabs/DevicesTab';
+import { ReadingTab } from './tabs/ReadingTab';
+import { TranslationTab } from './tabs/TranslationTab';
+
+type Tab = 'reading' | 'translation' | 'appearance' | 'devices';
 
 /**
- * Yönetim paneli: altyazı okumayı başlat/durdur, PS5 durumu, DeepL, TV ve son çeviriler.
- * Okuma ayarları şimdilik gizli; DEFAULT_OCR_SETTINGS kullanılır.
+ * Yönetim paneli: alttaki sekmelerle Okuma / Çeviri / Görünüm / Cihazlar sayfaları.
+ * Durum (çevirmen, oturum, ayarlar) burada tutulur; sekme değişince kaybolmaz.
+ * OCR aralığı şimdilik gizli (DEFAULT_OCR_SETTINGS); okuma alanları kurulum ekranından seçilir.
  */
 export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
+  const [tab, setTab] = useState<Tab>('reading');
+  const [editingRegions, setEditingRegions] = useState(false);
+
+  // Android geri tuşu: ana sekmede değilsek önce ana sekmeye dön.
+  useEffect(() => {
+    if (tab === 'reading') {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setTab('reading');
+      return true;
+    });
+    return () => sub.remove();
+  }, [tab]);
+
   const deeplKey = useDeepLKey();
   const protectedTerms = useProtectedTerms();
   const deepl = useMemo(
@@ -80,6 +99,7 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const overlay = useOverlayPermission();
   const session = useCaptureSession();
   const subtitleStyle = useSubtitleStyle();
+  const readRegions = useReadRegions();
   const { history, clearHistory } = useSubtitleTranslator(translator);
 
   // ML Kit modeli ilk çeviride indirilir; çeviri gelince durum notunu tazele.
@@ -95,107 +115,75 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
     if (session.running) {
       session.stop();
     } else {
-      session.start(DEFAULT_OCR_SETTINGS);
+      session.start({
+        ...DEFAULT_OCR_SETTINGS,
+        regions: readRegions.regions,
+      });
     }
   };
 
-  const header = (
-    <>
-      <Text style={styles.title}>Altyazı Çevirmeni</Text>
-      <Text style={styles.subtitle}>
-        PS5 altyazılarını okur, Türkçe çeviriyi TV'de oyunun üstünde gösterir.
-      </Text>
+  if (editingRegions) {
+    return (
+      <RegionSetupScreen
+        initial={readRegions.regions}
+        onSave={list => {
+          readRegions.setRegions(list);
+          setEditingRegions(false);
+        }}
+        onCancel={() => setEditingRegions(false)}
+      />
+    );
+  }
 
-      <Card title="Altyazı okuma">
-        <Para tone={session.running ? 'ok' : 'muted'}>
-          {session.running
-            ? '● Çalışıyor — telefon ekranını kapatabilirsin'
-            : '○ Durdu'}
-        </Para>
-        {session.error ? <Para tone="warn">{session.error}</Para> : null}
-        <Para tone={engineNote.warn ? 'warn' : 'muted'}>{engineNote.text}</Para>
-        <Button
-          label={session.running ? 'Durdur' : 'Başlat'}
-          onPress={onToggle}
-          loading={session.starting}
-          variant={session.running ? 'danger' : 'primary'}
+  const tabs: TabItem<Tab>[] = [
+    { key: 'reading', label: 'Okuma', icon: '▶︎', badge: session.running },
+    { key: 'translation', label: 'Çeviri', icon: '⇄' },
+    { key: 'appearance', label: 'Görünüm', icon: 'Aa' },
+    { key: 'devices', label: 'Cihazlar', icon: '▣' },
+  ];
+
+  let content: React.ReactNode;
+  switch (tab) {
+    case 'reading':
+      content = (
+        <ReadingTab
+          session={session}
+          overlay={overlay}
+          engineNote={engineNote}
+          history={history}
+          onToggle={onToggle}
+          onClearHistory={clearHistory}
+          regionsNote={
+            isDefaultRegions(readRegions.regions)
+              ? "Varsayılan: ekranın alt %20'si."
+              : `${readRegions.regions.length} alan seçili.`
+          }
+          onEditRegions={() => setEditingRegions(true)}
         />
-        {overlay.granted === false ? (
-          <>
-            <Para>
-              Çeviriyi telefonda da görmek için "üstte gösterme" izni gerekir
-              (TV için gerekmez).
-            </Para>
-            <Button
-              label="Üstte gösterme iznini ver"
-              onPress={overlay.request}
-              variant="ghost"
-            />
-          </>
-        ) : null}
-      </Card>
-
-      <ConsoleCard onRepair={onOpenWizard} />
-
-      <TranslationSettings
-        apiKey={deeplKey.apiKey}
-        deepl={deepl}
-        onSave={deeplKey.save}
-        onClear={deeplKey.clear}
-        engine={engine}
-      />
-
-      <ProtectedTermsCard
-        terms={protectedTerms.terms}
-        onAdd={protectedTerms.add}
-        onRemove={protectedTerms.remove}
-        onReset={protectedTerms.reset}
-      />
-
-      {tv.settings ? (
-        <TvSettingsCard
-          settings={tv.settings}
-          state={tv.state}
-          onChange={tv.update}
+      );
+      break;
+    case 'translation':
+      content = (
+        <TranslationTab
+          deeplKey={deeplKey}
+          deepl={deepl}
+          engine={engine}
+          protectedTerms={protectedTerms}
         />
-      ) : null}
-
-      <SubtitleStyleCard
-        style={subtitleStyle.style}
-        onChange={subtitleStyle.update}
-        onReset={subtitleStyle.reset}
-      />
-
-      <View style={styles.historyHeader}>
-        <Text style={styles.label}>Son altyazılar</Text>
-        <Pressable onPress={clearHistory}>
-          <Text style={styles.link}>Temizle</Text>
-        </Pressable>
-      </View>
-    </>
-  );
-
-  const footer = (
-    <Pressable onPress={onOpenWizard} style={styles.footer}>
-      <Text style={styles.link}>Kurulum sihirbazını yeniden çalıştır</Text>
-    </Pressable>
-  );
+      );
+      break;
+    case 'appearance':
+      content = <AppearanceTab subtitleStyle={subtitleStyle} />;
+      break;
+    case 'devices':
+      content = <DevicesTab tv={tv} onOpenWizard={onOpenWizard} />;
+      break;
+  }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <FlatList
-        data={history}
-        keyExtractor={item => String(item.id)}
-        renderItem={({ item }) => <HistoryItem item={item} />}
-        ListHeaderComponent={header}
-        ListFooterComponent={footer}
-        ListEmptyComponent={
-          <Text style={styles.empty}>
-            Henüz altyazı yok. Başlat'a basıp oyununa dön.
-          </Text>
-        }
-        contentContainerStyle={styles.list}
-      />
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <View style={styles.content}>{content}</View>
+      <TabBar tabs={tabs} active={tab} onChange={setTab} />
     </SafeAreaView>
   );
 }
@@ -230,50 +218,7 @@ function describeEngine(
   return { text: 'Çeviri: DeepL (sorun olursa Google ML Kit).', warn: false };
 }
 
-const HistoryItem = React.memo(({ item }: { item: SubtitleEntry }) => (
-  <View style={styles.item}>
-    <Text style={styles.original}>{item.original}</Text>
-    <Text
-      style={[
-        styles.translated,
-        item.status === 'error' && styles.translatedError,
-      ]}
-    >
-      {item.status === 'pending' ? 'Çevriliyor…' : item.translated}
-    </Text>
-    <Text style={styles.meta}>
-      OCR {item.ocrLatencyMs} ms
-      {item.translationLatencyMs != null
-        ? ` · çeviri ${item.translationLatencyMs} ms`
-        : ''}
-      {item.fromCache ? ' · önbellek' : ''}
-    </Text>
-  </View>
-));
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16 },
-  title: { color: colors.text, fontSize: 24, fontWeight: '700', marginTop: 12 },
-  subtitle: { color: colors.muted, marginTop: 4 },
-  label: { color: colors.muted, fontSize: 13, marginTop: 4 },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  link: { color: '#60a5fa' },
-  list: { paddingVertical: 8, gap: 8 },
-  empty: { color: colors.faint, textAlign: 'center', marginTop: 24 },
-  footer: { alignSelf: 'center', marginVertical: 24 },
-  item: { backgroundColor: colors.card, borderRadius: 10, padding: 12 },
-  original: { color: colors.muted },
-  translated: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  translatedError: { color: colors.warn },
-  meta: { color: '#475569', fontSize: 11, marginTop: 6 },
+  root: { flex: 1, backgroundColor: colors.bg },
+  content: { flex: 1 },
 });

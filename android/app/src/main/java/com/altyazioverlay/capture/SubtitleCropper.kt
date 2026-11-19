@@ -1,34 +1,48 @@
 package com.altyazioverlay.capture
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
 import android.media.Image
 
 /**
- * Kırpılmış alt bölge. [bitmap] yeniden kullanılır — tüketici işi bitene kadar
- * bir sonraki kare üretilmez (bkz. [FrameSink.isReady]).
+ * OCR'a verilen kare: seçili okuma alanları (bkz. [RegionLayout]). [bitmap] yeniden
+ * kullanılır — tüketici işi bitene kadar bir sonraki kare üretilmez (bkz. [FrameSink.isReady]).
  *
  * [bitmap] genişliği, satır hizalaması (row padding) yüzünden [contentWidth]'ten
  * birkaç piksel büyük olabilir; sağdaki fazlalık siyahtır ve OCR'ı etkilemez.
+ *
+ * [sourceWidth] / [sourceHeight]: alanların kesildiği tam karenin boyutu (aynı ölçekte).
+ * OCR filtreleri (minimum satır yüksekliği, ortalama) ekrana göre sabit kalsın diye.
  */
 class CroppedFrame(
     val bitmap: Bitmap,
     val contentWidth: Int,
     val contentHeight: Int,
+    val sourceWidth: Int,
+    val sourceHeight: Int,
 )
 
 /**
- * Ekranın sadece alt [cropRatio] kısmını Bitmap'e kopyalar.
+ * Ekran yakalamada (MediaProjection) okuma alanlarını Bitmap'e kopyalar.
  *
- * Optimizasyon: Önce tam ekran Bitmap üretip sonra createBitmap(...) ile kırpmak yerine,
- * ImageReader'ın ham RGBA buffer'ında doğrudan kırpma satırına atlanır ve SADECE alt
- * satırlar kopyalanır. Böylece:
- *  - Her karede tam ekran (ör. 1920x1080x4 = ~8MB) ara Bitmap tahsis edilmez,
- *  - Kopyalanan bayt ~%80 azalır,
- *  - Tek bir Bitmap tekrar tekrar kullanılır (GC baskısı yok).
+ * Optimizasyon: tam ekran Bitmap üretilmez. ImageReader'ın ham RGBA buffer'ında alanları
+ * kapsayan satır şeridine atlanır ve SADECE o satırlar kopyalanır; tek bir Bitmap tekrar
+ * tekrar kullanılır (GC baskısı yok). Alan tam genişlikte tek şeritse doğrudan o verilir,
+ * değilse alanlar [RegionLayout]'a göre ikinci bir Bitmap'te birleştirilir.
  */
-class SubtitleCropper(private val cropRatio: Float) {
+class SubtitleCropper(private val regions: List<ReadRegion>) {
 
-    private var reusable: Bitmap? = null
+    private var band: Bitmap? = null
+    private var composed: Bitmap? = null
+    private var layout: RegionLayout? = null
+    private val canvas = Canvas()
+    private val src = Rect()
+    private val dst = Rect()
+
+    /** Son [crop] çağrısındaki şerit tamamen boş muydu (bkz. [isTransparent]). */
+    private var lastBandTransparent = false
 
     fun crop(image: Image): CroppedFrame? {
         val plane = image.planes.firstOrNull() ?: return null
@@ -37,51 +51,75 @@ class SubtitleCropper(private val cropRatio: Float) {
         val width = image.width
         val height = image.height
 
-        val cropTop = (height * (1f - cropRatio)).toInt().coerceIn(0, height - 1)
+        val l = layout?.takeIf { it.sourceWidth == width && it.sourceHeight == height }
+            ?: RegionLayout(regions, width, height).also { layout = it }
+
+        val bandTop = l.sources.minOf { it.top }
         val rowPadding = rowStride - pixelStride * width
         // Son satırda padding bulunmayabilir; buffer taşmasını önlemek için bir satır eksik al.
-        val cropHeight = (height - cropTop) - if (rowPadding > 0) 1 else 0
-        if (cropHeight <= 0) return null
+        val bandBottom = minOf(l.sources.maxOf { it.bottom }, height - if (rowPadding > 0) 1 else 0)
+        val bandHeight = bandBottom - bandTop
+        if (bandHeight <= 0) return null
 
         val bufferWidth = rowStride / pixelStride
-        val bitmap = obtainBitmap(bufferWidth, cropHeight)
+        val bandBmp = obtain(band, bufferWidth, bandHeight).also { band = it }
 
         val buffer = plane.buffer
         buffer.rewind()
-        buffer.position(cropTop * rowStride)
-        bitmap.copyPixelsFromBuffer(buffer)
+        buffer.position(bandTop * rowStride)
+        buffer.limit(minOf(buffer.capacity(), bandBottom * rowStride))
+        bandBmp.copyPixelsFromBuffer(buffer)
+        buffer.limit(buffer.capacity())
+        lastBandTransparent = isBlank(bandBmp, width, bandHeight)
 
-        return CroppedFrame(bitmap, width, cropHeight)
+        val single = l.sources.singleOrNull()
+        if (single != null && single.left == 0 && single.right == width) {
+            return CroppedFrame(bandBmp, width, bandHeight, width, height)
+        }
+
+        val out = obtain(composed, l.width, l.height).also { composed = it }
+        out.eraseColor(Color.BLACK)
+        canvas.setBitmap(out)
+        l.sources.forEachIndexed { i, r ->
+            src.set(r.left, r.top - bandTop, r.right, minOf(r.bottom, bandBottom) - bandTop)
+            dst.set(l.offsetsX[i], l.offsetsY[i], l.offsetsX[i] + src.width(), l.offsetsY[i] + src.height())
+            canvas.drawBitmap(bandBmp, src, dst, null)
+        }
+        canvas.setBitmap(null)
+        return CroppedFrame(out, l.width, l.height, width, height)
     }
 
     /**
      * Tampon tamamen boş mu (tüm örnek piksellerde alfa = 0)? Ekrana çizilen gerçek
      * içerik her zaman opaktır; boş tampon bileşimin başarısız olduğunu gösterir.
-     * 8x4 = 32 noktadan örnekler, kare başına maliyeti ihmal edilebilir.
      */
-    fun isTransparent(frame: CroppedFrame): Boolean {
-        val bmp = frame.bitmap
+    @Suppress("UNUSED_PARAMETER")
+    fun isTransparent(frame: CroppedFrame): Boolean = lastBandTransparent
+
+    /** 8x4 = 32 noktadan örnekler, kare başına maliyeti ihmal edilebilir. */
+    private fun isBlank(bmp: Bitmap, w: Int, h: Int): Boolean {
         for (gy in 0 until 4) {
-            val y = (frame.contentHeight * (2 * gy + 1)) / 8
+            val y = (h * (2 * gy + 1)) / 8
             for (gx in 0 until 8) {
-                val x = (frame.contentWidth * (2 * gx + 1)) / 16
+                val x = (w * (2 * gx + 1)) / 16
                 if ((bmp.getPixel(x, y) ushr 24) != 0) return false
             }
         }
         return true
     }
 
-    private fun obtainBitmap(w: Int, h: Int): Bitmap {
-        val current = reusable
+    private fun obtain(current: Bitmap?, w: Int, h: Int): Bitmap {
         if (current != null && !current.isRecycled && current.width == w && current.height == h) {
             return current
         }
         current?.recycle()
-        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { reusable = it }
+        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     }
 
     fun release() {
-        reusable?.recycle()
-        reusable = null
+        band?.recycle()
+        band = null
+        composed?.recycle()
+        composed = null
     }
 }

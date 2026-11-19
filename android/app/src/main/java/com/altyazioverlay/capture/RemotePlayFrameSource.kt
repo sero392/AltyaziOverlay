@@ -15,9 +15,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * [ScreenCaptureManager]'ın yayın karşılığı: aynı [FrameSink] arayüzünü besler, böylece OCR,
  * diff, filtreler, çeviri ve TV bağlantısı değişmeden kalır.
  *
- * - Kareler çözücü thread'inden gelir; [Image] çağrı bitince kapanır. Bu yüzden sadece alt
- *   [CaptureConfig.cropRatio] kısmın parlaklık (Y) satırları hızlıca bir tampona kopyalanır,
- *   OCR işi yakalama thread'ine devredilir. Gri görüntü OCR için yeterli; renk dönüşümü yok.
+ * - Kareler çözücü thread'inden gelir; [Image] çağrı bitince kapanır. Bu yüzden sadece seçili
+ *   okuma alanlarının ([CaptureConfig.regions]) parlaklık (Y) satırları hızlıca bir tampona
+ *   alt alta kopyalanır ([RegionLayout]), OCR işi yakalama thread'ine devredilir. Gri görüntü OCR için yeterli; renk dönüşümü yok.
  * - Kısma ve backpressure ekran yakalamadakiyle aynı: aralık dolmadan veya OCR meşgulken
  *   gelen kareler hiç kopyalanmaz.
  */
@@ -37,6 +37,8 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
     private var luma = ByteArray(0)
     private var lumaWidth = 0
     private var lumaHeight = 0
+    private var sourceWidth = 0
+    private var sourceHeight = 0
 
     // Yalnızca yakalama thread'inde.
     private var pixels = IntArray(0)
@@ -46,37 +48,65 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
         sink = frameSink
     }
 
+    /** Okuma alanları; yayın sürerken kurulum ekranından değiştirilebilir ([setRegions]). */
+    @Volatile private var regions: List<ReadRegion> = config.regions
+    private var layout: RegionLayout? = null
+
+    /** Bir sonraki çözülmüş karede çağrılır (kurulum ekranı için anlık görüntü). */
+    private val snapshotRequest = java.util.concurrent.atomic.AtomicReference<((FrameSnapshot) -> Unit)?>(null)
+
+    fun setRegions(list: List<ReadRegion>) {
+        regions = list
+    }
+
+    fun requestSnapshot(callback: (FrameSnapshot) -> Unit) {
+        snapshotRequest.set(callback)
+    }
+
     /** Çözücü thread'inden çağrılır. Dönüşte [image] kapatılır; referans tutulmaz. */
     fun onDecodedFrame(image: Image) {
+        snapshotRequest.getAndSet(null)?.let { cb ->
+            val snap = FrameSnapshot.capture(image)
+            handler.post { cb(snap) }
+        }
         val target = sink ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastProcessedAt < config.intervalMs) return
         if (pending.get() || !target.isReady()) return
 
         val crop = image.cropRect
-        val width = crop.width()
-        val height = (crop.height() * config.cropRatio).toInt()
-        if (width <= 0 || height <= 0) return
-        val top = crop.bottom - height
+        val frameW = crop.width()
+        val frameH = crop.height()
+        if (frameW <= 0 || frameH <= 0) return
+        val current = regions
+        val l = layout?.takeIf { it.sourceWidth == frameW && it.sourceHeight == frameH && it.regions === current }
+            ?: RegionLayout(current, frameW, frameH).also { layout = it }
+        val width = l.width
+        val height = l.height
 
         val plane = image.planes[0]
         val buffer = plane.buffer
         val rowStride = plane.rowStride
         val pixelStride = plane.pixelStride
         if (luma.size != width * height) luma = ByteArray(width * height)
-        if (pixelStride == 1) {
-            for (y in 0 until height) {
-                buffer.position((top + y) * rowStride + crop.left)
-                buffer.get(luma, y * width, width)
-            }
-        } else {
-            for (y in 0 until height) {
-                val row = (top + y) * rowStride + crop.left * pixelStride
-                for (x in 0 until width) luma[y * width + x] = buffer.get(row + x * pixelStride)
+        java.util.Arrays.fill(luma, 0)
+        l.sources.forEachIndexed { i, r ->
+            val rw = r.width()
+            for (y in 0 until r.height()) {
+                val dst = (l.offsetsY[i] + y) * width + l.offsetsX[i]
+                val row = (crop.top + r.top + y) * rowStride + (crop.left + r.left) * pixelStride
+                if (pixelStride == 1) {
+                    buffer.position(row)
+                    buffer.get(luma, dst, rw)
+                } else {
+                    for (x in 0 until rw) luma[dst + x] = buffer.get(row + x * pixelStride)
+                }
             }
         }
         lumaWidth = width
         lumaHeight = height
+        sourceWidth = frameW
+        sourceHeight = frameH
         lastProcessedAt = now
         pending.set(true)
         handler.post(::deliver)
@@ -99,7 +129,7 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
                     bitmap = it
                 }
             bmp.setPixels(pixels, 0, w, 0, 0, w, h)
-            target.onFrame(CroppedFrame(bmp, w, h))
+            target.onFrame(CroppedFrame(bmp, w, h, sourceWidth, sourceHeight))
         } finally {
             pending.set(false)
         }

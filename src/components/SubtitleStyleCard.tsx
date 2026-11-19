@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SubtitleStyle } from '../native/SubtitleCapture';
 import { Card, colors } from './ui';
 
-const MIN_SIZE = 16;
+const MIN_SIZE = 10;
 const MAX_SIZE = 60;
 const SIZE_STEP = 2;
 

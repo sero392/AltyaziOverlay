@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-tests/
+out/
+resources/bin/
+native/build/
+native/.toolchain/
+build/

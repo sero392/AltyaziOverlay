@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Altyazı TV</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!--
+      webOS'ta uygulamalar başka bir girişin (HDMI) üstüne çizemez. Bu yüzden PS5'in bağlı olduğu
+      HDMI girişi uygulamanın içinde tam ekran gösterilir ve çeviri onun üstüne yazılır.
+      "service/webos-external" kaynağı belgelenmemiş ama webOS TV'lerde kullanılan bir özelliktir.
+    -->
+    <video id="hdmi" autoplay></video>
+
+    <div id="sub-wrap"><div id="sub"></div></div>
+
+    <div id="panel" class="hidden">
+      <h1>Altyazı TV</h1>
+      <div class="row"><span class="k">HDMI girişi</span><span class="v">‹ <b id="port">1</b> ›</span></div>
+      <div class="row"><span class="k">Durum</span><span class="v" id="status">Başlatılıyor…</span></div>
+      <div class="row"><span class="k">Bu TV'nin IP adresi</span><span class="v" id="ip">-</span></div>
+      <p class="hint">
+        PS5 hangi HDMI girişine bağlıysa onu seç (◀ ▶). Telefon ya da bilgisayar TV'yi ağda kendisi bulur; bulamazsa
+        uygulamada TV IP'si olarak yukarıdaki adresi gir.
+      </p>
+      <p class="hint">OK: paneli kapat · Geri: çık</p>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

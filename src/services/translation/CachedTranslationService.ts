@@ -28,7 +28,7 @@ export class CachedTranslationService implements TranslationService {
       // LRU: en sona taşı.
       this.cache.delete(key);
       this.cache.set(key, cached);
-      return { text: cached, fromCache: true };
+      return { text: cached, fromCache: true, engine: 'önbellek' };
     }
 
     let pending = this.inflight.get(key);

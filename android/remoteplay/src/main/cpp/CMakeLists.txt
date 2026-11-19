@@ -105,6 +105,43 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CHIAKI_LIB}/sr
 list(REMOVE_ITEM CHIAKI_SOURCES "${CHIAKI_LIB}/src/streamconnection.c")
 list(APPEND CHIAKI_SOURCES "${PATCHED_STREAMCONNECTION}")
 
+# Hata düzeltmesi: chiaki_rpcrypt_generate_iv'in Mbed TLS dalında HMAC-SHA256 çıktısı (32 bayt)
+# 16 baytlık yığın tamponuna yazılıyor ve yanındaki mbedtls_md_context_t'yi bozuyor. Android'de
+# yığın düzeni şans eseri zarar görmüyordu; Windows'ta (desktop/) eşleştirme bu yüzden çöküyordu.
+file(READ "${CHIAKI_LIB}/src/rpcrypt.c" RPCRYPT_SRC)
+set(RPCRYPT_FROM "uint8_t hmac[CHIAKI_RPCRYPT_KEY_SIZE];\n\tunsigned int hmac_len = 0;")
+string(FIND "${RPCRYPT_SRC}" "${RPCRYPT_FROM}" POS)
+if(POS EQUAL -1)
+    message(FATAL_ERROR "rpcrypt.c yaması uygulanamadı (chiaki-ng değişmiş)")
+endif()
+string(REPLACE "${RPCRYPT_FROM}"
+    "uint8_t hmac[32]; /* altyazi: SHA256 çıktısı 32 bayt (taşma düzeltmesi) */\n\tunsigned int hmac_len = 0;"
+    RPCRYPT_SRC "${RPCRYPT_SRC}")
+set(PATCHED_RPCRYPT "${CMAKE_CURRENT_BINARY_DIR}/patched/rpcrypt.c")
+file(WRITE "${PATCHED_RPCRYPT}" "${RPCRYPT_SRC}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CHIAKI_LIB}/src/rpcrypt.c")
+list(REMOVE_ITEM CHIAKI_SOURCES "${CHIAKI_LIB}/src/rpcrypt.c")
+list(APPEND CHIAKI_SOURCES "${PATCHED_RPCRYPT}")
+
+# Hata düzeltmesi: PS5 paket kaybı olduğunda onaylara (data ack) "boşluk bloğu" ekler
+# (12 + 4*n bayt). chiaki yalnızca tam 12 baytlık onayı kabul edip gerisini atıyordu; bu yüzden
+# kayıplı Wi-Fi'da gönderilen her paket 25 kez yeniden yollanıyor, gönderme tamponu taşıyor ve
+# PS5 oturumu kapatıyordu. Kümülatif onay her durumda işlenir; boşluk sayısı ayrıca doğrulanır.
+file(READ "${CHIAKI_LIB}/src/takion.c" TAKION_SRC)
+set(TAKION_FROM "if(buf_size != 0xc)\n\t{\n\t\tCHIAKI_LOGE(takion->log, \"Takion received data ack with size")
+string(FIND "${TAKION_SRC}" "${TAKION_FROM}" POS)
+if(POS EQUAL -1)
+    message(FATAL_ERROR "takion.c yaması uygulanamadı (chiaki-ng değişmiş)")
+endif()
+string(REPLACE "${TAKION_FROM}"
+    "if(buf_size < 0xc) /* altyazi: boşluk bloklu onaylar da kabul edilir */\n\t{\n\t\tCHIAKI_LOGE(takion->log, \"Takion received data ack with size"
+    TAKION_SRC "${TAKION_SRC}")
+set(PATCHED_TAKION "${CMAKE_CURRENT_BINARY_DIR}/patched/takion.c")
+file(WRITE "${PATCHED_TAKION}" "${TAKION_SRC}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CHIAKI_LIB}/src/takion.c")
+list(REMOVE_ITEM CHIAKI_SOURCES "${CHIAKI_LIB}/src/takion.c")
+list(APPEND CHIAKI_SOURCES "${PATCHED_TAKION}")
+
 add_library(chiaki STATIC
     ${CHIAKI_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/generated/takion.pb.c"

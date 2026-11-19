@@ -10,7 +10,15 @@ import org.json.JSONObject
  */
 class TvSettings(context: Context) {
 
-    enum class Position(val label: String) { BOTTOM("Altta"), MIDDLE_LOW("Alt-orta"), TOP("Üstte") }
+    /**
+     * OVER_ORIGINAL: çeviri İngilizce altyazının tam üstüne yazılır (konum bilgisi gelmezse altta).
+     */
+    enum class Position(val label: String) {
+        OVER_ORIGINAL("İngilizcenin üstünde"),
+        BOTTOM("Altta"),
+        MIDDLE_LOW("Alt-orta"),
+        TOP("Üstte"),
+    }
 
     /** Telefondaki altyazı görünümü (telefondaki SubtitleStyle ile aynı alanlar). */
     data class Style(
@@ -24,7 +32,7 @@ class TvSettings(context: Context) {
                 val bg = parseColor(o.optString("bgColor"), Color.BLACK)
                 val opacity = o.optInt("bgOpacity", 75).coerceIn(0, 100)
                 return Style(
-                    fontSize = o.optDouble("fontSize", d.fontSize.toDouble()).toFloat().coerceIn(12f, 72f),
+                    fontSize = o.optDouble("fontSize", d.fontSize.toDouble()).toFloat().coerceIn(10f, 72f),
                     textColor = parseColor(o.optString("textColor"), d.textColor),
                     bgColor = Color.argb(opacity * 255 / 100, Color.red(bg), Color.green(bg), Color.blue(bg)),
                 )
@@ -38,7 +46,7 @@ class TvSettings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("tv_settings", Context.MODE_PRIVATE)
 
     var position: Position
-        get() = enumValueOrDefault(prefs.getString(KEY_POSITION, null), Position.BOTTOM)
+        get() = enumValueOrDefault(prefs.getString(KEY_POSITION, null), Position.OVER_ORIGINAL)
         set(value) = prefs.edit().putString(KEY_POSITION, value.name).apply()
 
     /** Telefondan gelen son stil; hiç gelmediyse varsayılan. */

@@ -1,0 +1,2 @@
+C:\dev\AltyaziOverlay\desktop\native\build\ocr\altyazi-ocr.pdb
+C:\dev\AltyaziOverlay\desktop\native\build\ocr\altyazi-ocr.exe

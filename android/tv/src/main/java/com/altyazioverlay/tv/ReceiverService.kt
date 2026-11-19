@@ -42,6 +42,8 @@ class ReceiverService : Service() {
 
     private lateinit var settings: TvSettings
     private lateinit var overlay: SubtitleOverlay
+    /** Tüm sayfa çevirisi; altyazı penceresinin altında kalır (önce eklenir). */
+    private lateinit var pageOverlay: PageOverlay
 
     @Volatile private var serverSocket: ServerSocket? = null
     @Volatile private var client: Socket? = null
@@ -56,7 +58,9 @@ class ReceiverService : Service() {
         instance = this
         settings = TvSettings(this)
         overlay = SubtitleOverlay(this, settings)
+        pageOverlay = PageOverlay(this, settings)
         startInForeground()
+        if (overlay.canDraw) pageOverlay.attach()
         updateStatus { it.copy(overlayReady = overlay.attach()) }
         running = true
         thread(name = "AltyaziServer", isDaemon = true) { serverLoop() }
@@ -64,7 +68,10 @@ class ReceiverService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // İzin sonradan (adb ile) verildiyse pencereyi şimdi ekle.
-        if (!status.overlayReady) updateStatus { it.copy(overlayReady = overlay.attach()) }
+        if (!status.overlayReady) {
+            if (overlay.canDraw) pageOverlay.attach()
+            updateStatus { it.copy(overlayReady = overlay.attach()) }
+        }
         return START_STICKY
     }
 
@@ -74,13 +81,17 @@ class ReceiverService : Service() {
         runCatching { client?.close() }
         runCatching { serverSocket?.close() }
         overlay.detach()
+        pageOverlay.detach()
         instance = null
         updateStatus { Status() }
         super.onDestroy()
     }
 
     /** Ana thread'den (ayar ekranı) çağrılır. */
-    fun applySettings() = overlay.applySettings()
+    fun applySettings() {
+        overlay.applySettings()
+        pageOverlay.applySettings()
+    }
 
     fun showTest(text: String) = overlay.show(text)
 
@@ -131,6 +142,7 @@ class ReceiverService : Service() {
             if (client === socket) {
                 client = null
                 overlay.show("")
+                pageOverlay.show(emptyList())
                 updateStatus { it.copy(clientName = null) }
             }
             Log.i(TAG, "Phone disconnected: $remote")
@@ -142,12 +154,17 @@ class ReceiverService : Service() {
         when (msg.optString("t")) {
             "sub" -> {
                 val text = msg.optString("text")
-                overlay.show(text)
+                overlay.show(text, SubtitleBox.fromJson(msg.optJSONObject("box")))
                 updateStatus { it.copy(lastText = text) }
+            }
+            "page" -> {
+                val items = PageItem.listFromJson(msg.optJSONArray("items"))
+                pageOverlay.show(items)
+                updateStatus { it.copy(lastText = items.joinToString(" · ") { i -> i.text }.take(200)) }
             }
             "style" -> {
                 settings.saveStyle(msg)
-                overlay.applySettings()
+                applySettings()
             }
             "hello" -> updateStatus { it.copy(clientName = msg.optString("name").ifBlank { it.clientName }) }
             "ping" -> Unit

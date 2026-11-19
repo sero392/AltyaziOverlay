@@ -18,21 +18,25 @@ import kotlin.math.abs
  */
 class TextRecognizerEngine(
     private val callbackExecutor: Executor,
-    /** Kırpılan bölgenin ekran yüksekliğine oranı; satır yüksekliği eşiği ekrana göre sabit kalsın. */
-    private val cropRatio: Float,
 ) {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
     /**
      * @param contentWidth Bitmap'in gerçek görüntü genişliği (sağdaki hizalama dolgusu hariç).
+     * @param sourceWidth / sourceHeight Alanların kesildiği tam ekranın boyutu (eşikler ekrana göre).
      * @param onResult null = hata. Aksi halde okunan (boş olabilir) metin.
      */
-    fun recognize(bitmap: Bitmap, contentWidth: Int, onResult: (String?) -> Unit) {
-        val frameHeight = bitmap.height
+    fun recognize(
+        bitmap: Bitmap,
+        contentWidth: Int,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        onResult: (String?) -> Unit,
+    ) {
         recognizer.process(InputImage.fromBitmap(bitmap, 0))
             .addOnSuccessListener(callbackExecutor) {
-                onResult(extract(it, contentWidth, frameHeight))
+                onResult(extract(it, contentWidth, sourceWidth, sourceHeight))
             }
             .addOnFailureListener(callbackExecutor) {
                 Log.w(TAG, "OCR failed", it)
@@ -53,10 +57,12 @@ class TextRecognizerEngine(
      * Ardından [SubtitleHeuristics] envanter / menü gibi oyun arayüzlerini eler. Ekranda
      * ortalanmamış çok sayıda yazı varsa (sola hizalı liste) bu da menü sayılır.
      */
-    private fun extract(result: Text, frameWidth: Int, frameHeight: Int): String {
-        val minLineHeight = (frameHeight / cropRatio) * MIN_LINE_HEIGHT_RATIO
+    private fun extract(result: Text, frameWidth: Int, sourceWidth: Int, sourceHeight: Int): String {
+        val minLineHeight = sourceHeight * MIN_LINE_HEIGHT_RATIO
+        // Alanlar karede yatayda ortalanır; sapma sınırı ekran genişliğine göre. Dar bir alan
+        // seçildiyse (ör. diyalog kutusu) içindeki satırların hepsi geçer.
         val centerX = frameWidth / 2f
-        val maxCenterOffset = frameWidth * MAX_CENTER_OFFSET_RATIO
+        val maxCenterOffset = sourceWidth * MAX_CENTER_OFFSET_RATIO
 
         val textLines = result.textBlocks
             .flatMap { it.lines }
@@ -79,9 +85,9 @@ class TextRecognizerEngine(
 
         val selected = SubtitleHeuristics.select(centered)
         selected.rejectReason?.let { Log.d(TAG, "rejected: $it") }
-        return selected.text
-            .replace(WHITESPACE, " ")
-            .trim()
+        return UiTextFilter.cleanSubtitleText(
+            UiTextFilter.stripTrailingObjective(selected.text.replace(WHITESPACE, " ").trim()),
+        )
     }
 
     fun close() = recognizer.close()
@@ -93,7 +99,7 @@ class TextRecognizerEngine(
         /** Satır merkezinin ekran merkezinden en fazla sapması (genişliğin oranı). */
         private const val MAX_CENTER_OFFSET_RATIO = 0.15f
         private const val MIN_CONFIDENCE = 0.5f
-        /** Okuma alanında bundan fazla yazı satırı varsa (ortalı olsun olmasın) ekranda menü vardır. */
+        /** Okuma alanlarında bundan fazla yazı satırı varsa (ortalı olsun olmasın) ekranda menü vardır. */
         private const val MAX_TEXT_LINES_ON_SCREEN = 6
         private val WHITESPACE = Regex("""\s+""")
     }

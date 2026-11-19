@@ -5,12 +5,20 @@ import {
   Platform,
 } from 'react-native';
 
+/** Ekranda OCR'lanacak dikdörtgen; ekran boyutuna oranlı (0-1). */
+export interface ReadRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** Native CaptureConfig ile birebir. Tüm alanlar opsiyonel; native taraf sınırları uygular. */
 export interface CaptureOptions {
   /** İki OCR denemesi arası minimum süre (ms). Varsayılan 500. */
   intervalMs?: number;
-  /** Alttan kırpılacak ekran oranı. Varsayılan 0.3 (alt %30). */
-  cropRatio?: number;
+  /** Okunacak ekran alanları (en çok 4). Varsayılan: alt %20. */
+  regions?: ReadRegion[];
   /** Sanal ekran maksimum genişliği (px). Varsayılan 1920. */
   maxCaptureWidth?: number;
   /** Metnin yayınlanması için gereken ardışık aynı okuma sayısı. Varsayılan 2. */

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Altyazı Çevirmeni</title>
+<meta name="description" content="PS5 oyunlarındaki İngilizce altyazıları okuyup Türkçe çevirisini TV'de oyunun üstünde gösteren Android uygulaması.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234f46e5'/%3E%3Cpath d='M14 18h36a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H30l-10 8v-8h-6a4 4 0 0 1-4-4V22a4 4 0 0 1 4-4z' fill='%23fff'/%3E%3Crect x='18' y='26' width='22' height='4' rx='2' fill='%234f46e5'/%3E%3Crect x='18' y='33' width='14' height='4' rx='2' fill='%234f46e5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --surface: #ffffff;
+    --text: #15151f;
+    --muted: #5d5d70;
+    --border: #e3e3ec;
+    --accent: #4f46e5;
+    --accent-text: #ffffff;
+    --accent-soft: #eeedfd;
+    --sub-bg: rgba(0, 0, 0, .72);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e0e14;
+      --surface: #17171f;
+      --text: #ececf3;
+      --muted: #a0a0b4;
+      --border: #2a2a36;
+      --accent: #7c74ff;
+      --accent-text: #0e0e14;
+      --accent-soft: #23223d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--accent); }
+
+  header { padding: 56px 0 32px; text-align: center; }
+  .logo { width: 72px; height: 72px; margin: 0 auto 18px; display: block; }
+  h1 { font-size: clamp(28px, 6vw, 42px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -.02em; }
+  .lead { color: var(--muted); font-size: 18px; max-width: 620px; margin: 0 auto; }
+
+  .demo {
+    margin: 32px auto 0;
+    max-width: 620px;
+    aspect-ratio: 16 / 8;
+    border-radius: 16px;
+    background: linear-gradient(160deg, #2b3a55 0%, #1b2438 55%, #121826 100%);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .demo::before {
+    content: ""; position: absolute; inset: auto -10% 18% -10%; height: 40%;
+    background: radial-gradient(ellipse at 30% 100%, #3d5a40 0%, transparent 65%),
+                radial-gradient(ellipse at 75% 100%, #2f4b3a 0%, transparent 60%);
+  }
+  .sub {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    padding: 4px 12px; border-radius: 6px; white-space: nowrap;
+    font-size: clamp(11px, 2.6vw, 16px); max-width: 92%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sub.en { bottom: 12%; color: #f3f3f3; text-shadow: 0 1px 2px #000; }
+  .sub.tr { top: 10%; background: var(--sub-bg); color: #ffe066; font-weight: 600; }
+
+  section { padding: 36px 0; }
+  h2 { font-size: 24px; margin: 0 0 20px; letter-spacing: -.01em; }
+
+  .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .card h3 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 10px; }
+  .card h3 svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .card .req { font-size: 13px; }
+  .btn {
+    margin-top: auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600;
+    padding: 12px 18px; border-radius: 10px; transition: filter .15s;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn svg { width: 18px; height: 18px; }
+
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; counter-reset: step; padding: 0; margin: 0; list-style: none; }
+  .flow li {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px;
+    counter-increment: step; position: relative;
+  }
+  .flow li::before {
+    content: counter(step); display: inline-grid; place-items: center; width: 28px; height: 28px;
+    border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; margin-bottom: 8px;
+  }
+  .flow strong { display: block; margin-bottom: 4px; }
+  .flow span { color: var(--muted); font-size: 14px; }
+
+  .notes { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 8px 22px; }
+  .notes ul { margin: 12px 0; padding-left: 20px; }
+  .notes li { margin: 8px 0; }
+  .notes li span { color: var(--muted); }
+  code {
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+    background: var(--accent-soft); padding: 2px 6px; border-radius: 5px; word-break: break-all;
+  }
+
+  footer { padding: 32px 0 48px; text-align: center; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+    <rect width="64" height="64" rx="14" fill="#4f46e5"/>
+    <path d="M14 18h36a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H30l-10 8v-8h-6a4 4 0 0 1-4-4V22a4 4 0 0 1 4-4z" fill="#fff"/>
+    <rect x="18" y="26" width="22" height="4" rx="2" fill="#4f46e5"/>
+    <rect x="18" y="33" width="14" height="4" rx="2" fill="#4f46e5"/>
+  </svg>
+  <h1>Altyazı Çevirmeni</h1>
+  <p class="lead">PS5 oyunlarındaki İngilizce altyazıları okur, Türkçe çevirisini TV'de oyunun üstünde gösterir. Sen oyunu her zamanki gibi kendi kolunla oynarsın.</p>
+
+  <div class="demo" role="img" aria-label="Oyun ekranının altında İngilizce altyazı, üstünde Türkçe çevirisi">
+    <div class="sub tr">Bu köprüyü gün batmadan geçmeliyiz.</div>
+    <div class="sub en">We have to cross this bridge before sunset.</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="indir">
+    <h2>İndir</h2>
+    <div class="downloads">
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>
+          Telefon uygulaması
+        </h3>
+        <p>PS5'e Remote Play ile bağlanır, altyazıları okur ve çevirir. Kurulum sihirbazı her adımda yol gösterir.</p>
+        <p class="req">Android 7.0 ve üzeri (64 bit)</p>
+        <a class="btn" href="AltyaziCevirmeni-telefon.apk" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          Telefon APK'sını indir
+        </a>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Altyazı TV
+        </h3>
+        <p>Çeviriyi oyun görüntüsünün üstüne yazar. TV açılınca kendiliğinden başlar, telefon onu ağda kendisi bulur.</p>
+        <p class="req">Android TV / Google TV 8.0 ve üzeri</p>
+        <a class="btn" href="AltyaziTV.apk" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          TV APK'sını indir
+        </a>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="13" rx="2"/><path d="M2 12h20M9 21h6M12 16v5"/></svg>
+          Masaüstü (Windows)
+        </h3>
+        <p>Telefonun yaptığı işi bilgisayarda yapar. Çeviriyi ekranın altında, her şeyin üstünde ya da Altyazı TV'de gösterir. Kurulum gerektirmez.</p>
+        <p class="req">Windows 10 / 11 (64 bit) · <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener">.NET 10 Çalışma Zamanı</a></p>
+        <a class="btn" href="AltyaziCevirmeni-masaustu.exe" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          Masaüstü uygulamasını indir
+        </a>
+      </div>
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 9v4h3M14 9h-2v4h2v-2"/></svg>
+          Altyazı TV (LG)
+        </h3>
+        <p>LG TV'ler başka bir girişin üstüne çizemediği için PS5'in HDMI girişini kendi içinde tam ekran gösterir ve çeviriyi üstüne yazar. Deneme sürümüdür.</p>
+        <p class="req">LG webOS 5 (2020) ve üzeri · Geliştirici Modu</p>
+        <a class="btn" href="AltyaziTV-LG.ipk" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          LG TV paketini indir
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section id="nasil">
+    <h2>Nasıl çalışır?</h2>
+    <ol class="flow">
+      <li><strong>Oyunu oyna</strong><span>PS5 her zamanki gibi HDMI ile TV'ye bağlı. Görüntüde gecikme olmaz.</span></li>
+      <li><strong>Telefon ya da bilgisayar izler</strong><span>Uygulama PS5'e Remote Play ile bağlanır. Telefonun ekranı kapalı, masada durabilir.</span></li>
+      <li><strong>Altyazıyı okur</strong><span>Görüntünün yalnızca altyazı bölgesini cihazın kendisinde okur (OCR). Menü ve tuş ipuçları elenir.</span></li>
+      <li><strong>Çevirir</strong><span>Metni DeepL, cihaz içi Google ML Kit ya da otomatik seçimle Türkçeye çevirir. Karakter ve yer adları gibi çevrilmeyecek kelimeleri kendin belirleyebilirsin.</span></li>
+      <li><strong>Gösterir</strong><span>Çeviri Wi-Fi ile TV'ye gider ve oyunun üstünde belirir. Yazı boyutunu, yazı ve arka plan rengini ayarlayabilirsin. Masaüstü sürümü bilgisayar ekranında da gösterebilir.</span></li>
+    </ol>
+  </section>
+
+  <section id="bilmen-gerekenler">
+    <h2>Bilmen gerekenler</h2>
+    <div class="notes">
+      <ul>
+        <li><strong>Aynı ağ.</strong> <span>PS5, telefon (ya da bilgisayar) ve TV aynı ağda olmalı.</span></li>
+        <li><strong>Ayrı bir PSN hesabı.</strong> <span>Uygulama kendi hesabınla bağlanırsa kolun oyundan kopar. Ücretsiz ikinci bir PSN hesabı açıp PS5'e ekle ve o hesapta Uzaktan Oynatma'yı etkinleştir.</span></li>
+        <li><strong>DeepL anahtarı (isteğe bağlı).</strong> <span>Ücretsiz DeepL API Free anahtarı ayda 500.000 karakter çeviri verir. Anahtar yoksa cihaz içi çeviri kullanılır.</span></li>
+        <li><strong>TV izni.</strong> <span>Altyazı TV'nin ekranın üstüne çizebilmesi için bilgisayardan bir kez şu komutu çalıştır:</span><br><code>adb shell appops set com.altyazioverlay.tv SYSTEM_ALERT_WINDOW allow</code></li>
+        <li><strong>Tüm sayfayı çevir (masaüstü).</strong> <span>Menüleri, notları ve mektupları çevirmek için masaüstü sürümü ekrandaki her yazıyı ayrı çevirip İngilizcenin tam üstüne yazabilir.</span></li>
+        <li><strong>LG TV kurulumu.</strong> <span>Paket LG Content Store'da yok; TV'de Developer Mode uygulamasıyla Geliştirici Modu'nu açıp bilgisayardan <code>npx ares-install --device lgtv AltyaziTV-LG.ipk</code> ile kur. Geliştirici Modu 50 saatte bir uzatılmalı. Oyun uygulamanın video katmanında gösterildiği için giriş gecikmesi artabilir.</span></li>
+        <li><strong>Gizlilik.</strong> <span>Görüntü buluta gönderilmez. Dışarıya yalnızca çevrilecek altyazı metni gider.</span></li>
+        <li><strong>APK kurulumu.</strong> <span>Cihazın "bilinmeyen kaynaklardan yükleme" izni istemesi normaldir; tarayıcına ya da dosya yöneticine bu izni ver.</span></li>
+        <li><strong>Windows uyarısı.</strong> <span>Uygulama imzalı olmadığı için Windows "bilgisayarınız korundu" uyarısı gösterebilir. "Ek bilgi" ve ardından "Yine de çalıştır" seç. Masaüstü sürümü için <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener">.NET 10 Çalışma Zamanı</a> kurulu olmalı.</span></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">Altyazı Çevirmeni · Android, Android TV, LG webOS ve Windows için açık kaynak uygulama</footer>
+
+</body>
+</html>

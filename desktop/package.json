@@ -1,0 +1,63 @@
+{
+  "name": "altyazi-desktop",
+  "productName": "Altyazı Çevirmeni",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PS5 altyazılarını Remote Play üzerinden okuyup Türkçe çeviren masaüstü uygulaması",
+  "license": "AGPL-3.0-only",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "start": "node scripts/build.mjs && electron .",
+    "dev": "node scripts/build.mjs && electron . --dev",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node scripts/build.mjs --tests && node --test dist-tests/*.cjs",
+    "dist:win": "node scripts/build-icon.mjs && node scripts/build.mjs && electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "bonjour-service": "^1.4.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "com.altyazioverlay.desktop",
+    "productName": "Altyazı Çevirmeni",
+    "artifactName": "AltyaziCevirmeni-masaustu.exe",
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/bin",
+        "to": "bin",
+        "filter": [
+          "*.exe"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "portable"
+      ]
+    },
+    "asar": true,
+    "npmRebuild": false
+  }
+}

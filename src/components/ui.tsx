@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -100,6 +101,43 @@ export function Row({ children }: { children: React.ReactNode }) {
   return <View style={styles.row}>{children}</View>;
 }
 
+/** Sekme sayfası başlığı: büyük başlık ve isteğe bağlı kısa açıklama. */
+export function PageHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <View>
+      <Text style={styles.pageTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.pageSubtitle}>{subtitle}</Text> : null}
+    </View>
+  );
+}
+
+/** Kaydırılabilir sekme sayfası. */
+export function Page({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={styles.page}
+      keyboardShouldPersistTaps="handled"
+    >
+      <PageHeader title={title} subtitle={subtitle} />
+      {children}
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.card,
@@ -137,4 +175,7 @@ const styles = StyleSheet.create({
   warn: { color: colors.warn },
   error: { color: colors.error },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  page: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
+  pageTitle: { color: colors.text, fontSize: 24, fontWeight: '700' },
+  pageSubtitle: { color: colors.muted, marginTop: 4 },
 });

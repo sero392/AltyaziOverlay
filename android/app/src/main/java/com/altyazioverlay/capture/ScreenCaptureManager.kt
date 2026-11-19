@@ -44,7 +44,7 @@ class ScreenCaptureManager(
     /** ML Kit callback'lerini de aynı thread'e indirir -> hat tamamen tek thread'li, kilitsiz. */
     val callbackExecutor: Executor = Executor { handler.post(it) }
 
-    private val cropper = SubtitleCropper(config.cropRatio)
+    private val cropper = SubtitleCropper(config.regions)
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var spec: CaptureSpec? = null
@@ -69,7 +69,7 @@ class ScreenCaptureManager(
             null,
             handler,
         )
-        Log.i(TAG, "Capture started ${s.width}x${s.height}@${s.dpi}dpi, crop=${config.cropRatio}")
+        Log.i(TAG, "Capture started ${s.width}x${s.height}@${s.dpi}dpi, regions=${config.regions}")
     }
 
     fun onDisplayChanged() {

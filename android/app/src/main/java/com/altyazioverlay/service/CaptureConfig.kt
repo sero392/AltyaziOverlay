@@ -1,6 +1,7 @@
 package com.altyazioverlay.service
 
 import android.os.Bundle
+import com.altyazioverlay.capture.ReadRegion
 
 /**
  * Yakalama hattının ayarları. JS tarafından gelir, Intent extra'sı olarak servise taşınır.
@@ -8,8 +9,8 @@ import android.os.Bundle
 data class CaptureConfig(
     /** İki OCR denemesi arasındaki minimum süre (ms). Saniyede ~2 kare altyazı için yeterli. */
     val intervalMs: Long = 500L,
-    /** Ekranın alttan kırpılacak oranı (0.3 = alt %30). Oynanışta altyazı ara sahnelerden yüksekte. */
-    val cropRatio: Float = 0.30f,
+    /** OCR'lanacak ekran alanları (oranlı). Kurulumda kullanıcı seçer; boşsa alt %20. */
+    val regions: List<ReadRegion> = ReadRegion.DEFAULT,
     /** Sanal ekranın maksimum genişliği. OCR doğruluğu / bellek dengesi. */
     val maxCaptureWidth: Int = 1920,
     /** Aynı metnin kaç ardışık okumada görülünce yayınlanacağı (titreşimi engeller). */
@@ -19,9 +20,16 @@ data class CaptureConfig(
     /** Sadece yatay ekranda oku: oyun akışı yatay, ana ekran / menüler dikey. */
     val landscapeOnly: Boolean = true,
 ) {
+    /**
+     * Telefondaki yüzen pencerenin alttan yüksekliği (ekran oranı): en üstteki okuma alanının
+     * hemen üstü, böylece pencere okunan altyazıyı örtmez.
+     */
+    val overlayBottomRatio: Float
+        get() = (1f - regions.minOf { it.y }).coerceIn(0.05f, 0.6f)
+
     fun toBundle(): Bundle = Bundle().apply {
         putLong(KEY_INTERVAL, intervalMs)
-        putFloat(KEY_CROP, cropRatio)
+        putFloatArray(KEY_REGIONS, ReadRegion.toFloatArray(regions))
         putInt(KEY_MAX_WIDTH, maxCaptureWidth)
         putInt(KEY_STABLE, stableFrames)
         putFloat(KEY_SIMILARITY, similarityThreshold)
@@ -30,7 +38,7 @@ data class CaptureConfig(
 
     companion object {
         private const val KEY_INTERVAL = "intervalMs"
-        private const val KEY_CROP = "cropRatio"
+        private const val KEY_REGIONS = "regions"
         private const val KEY_MAX_WIDTH = "maxCaptureWidth"
         private const val KEY_STABLE = "stableFrames"
         private const val KEY_SIMILARITY = "similarityThreshold"
@@ -41,7 +49,7 @@ data class CaptureConfig(
             if (b == null) return d
             return CaptureConfig(
                 intervalMs = b.getLong(KEY_INTERVAL, d.intervalMs).coerceIn(150L, 5_000L),
-                cropRatio = b.getFloat(KEY_CROP, d.cropRatio).coerceIn(0.05f, 0.6f),
+                regions = ReadRegion.fromFloatArray(b.getFloatArray(KEY_REGIONS)),
                 maxCaptureWidth = b.getInt(KEY_MAX_WIDTH, d.maxCaptureWidth).coerceIn(640, 3840),
                 stableFrames = b.getInt(KEY_STABLE, d.stableFrames).coerceIn(1, 5),
                 similarityThreshold = b.getFloat(KEY_SIMILARITY, d.similarityThreshold).coerceIn(0.5f, 1f),

@@ -5,6 +5,7 @@ import android.media.Image
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
+import com.altyazioverlay.capture.FrameSnapshot
 import com.altyazioverlay.remoteplay.DiscoveredConsole
 import com.altyazioverlay.remoteplay.PsDiscovery
 import com.altyazioverlay.remoteplay.RegisteredConsole
@@ -18,6 +19,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 import java.io.File
@@ -254,6 +256,91 @@ class RemotePlayModule(
         RemotePlayService.stop(reactContext)
     }
 
+    // ------------------------------------------------------------------ okuma alanı kurulumu
+
+    /**
+     * Okuma alanlarını seçmek için yayından renkli bir kare alır. Okuma çalışıyorsa o yayının
+     * bir sonraki karesi kullanılır; çalışmıyorsa kısa bir yayın açılıp kapatılır.
+     * @return { uri: "file://...", width, height }
+     */
+    @ReactMethod
+    fun captureSnapshot(promise: Promise) {
+        val done = AtomicBoolean(false)
+        val file = File(reactContext.cacheDir, "read_region_snapshot.jpg")
+
+        fun deliver(snap: FrameSnapshot) = worker.execute {
+            try {
+                snap.save(file)
+                promise.resolve(Arguments.createMap().apply {
+                    putString("uri", "file://${file.absolutePath}?t=${System.currentTimeMillis()}")
+                    putInt("width", snap.width)
+                    putInt("height", snap.height)
+                })
+            } catch (t: Throwable) {
+                promise.reject(E_STREAM, "Kare kaydedilemedi: ${t.message}", t)
+            }
+        }
+
+        val live = RemotePlayService.activeSource
+        if (live != null) {
+            live.requestSnapshot { snap -> if (done.compareAndSet(false, true)) deliver(snap) }
+            worker.schedule({
+                if (done.compareAndSet(false, true)) {
+                    promise.reject(E_STREAM, "Yayından kare gelmedi (PS5 bağlantısı kopmuş olabilir)")
+                }
+            }, SNAPSHOT_LIVE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            return
+        }
+
+        val console = loadConsole()
+        if (console == null) {
+            promise.reject(E_INPUT, "Önce PS5 ile eşleştirin")
+            return
+        }
+        if (client.isRunning) {
+            promise.reject(E_INPUT, "Başka bir yayın sürüyor, biraz sonra tekrar dene")
+            return
+        }
+        worker.execute {
+            var frames = 0
+            fun fail(message: String) {
+                if (!done.compareAndSet(false, true)) return
+                worker.execute { client.stop() }
+                promise.reject(E_STREAM, message)
+            }
+            val ok = client.start(
+                console,
+                StreamSettings(),
+                object : RemotePlayClient.SessionListener {
+                    override fun onConnected() = Unit
+
+                    override fun onDisconnected(reason: String, isError: Boolean, failure: SessionFailure?) {
+                        fail(failure?.message ?: "Yayın kapandı: $reason")
+                    }
+                },
+                { image ->
+                    frames++
+                    if (frames < WARMUP_FRAMES || done.get()) return@start
+                    if (!done.compareAndSet(false, true)) return@start
+                    val snap = FrameSnapshot.capture(image)
+                    worker.execute { client.stop() }
+                    deliver(snap)
+                },
+            )
+            if (!ok) {
+                fail("Yayın başlatılamadı")
+                return@execute
+            }
+            worker.schedule({ fail("${TIMEOUT_MS / 1000} sn içinde kare gelmedi") }, TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    /** Okuma sürüyorsa yeni alanları hemen uygular (yayını yeniden başlatmadan). */
+    @ReactMethod
+    fun setReadRegions(regions: ReadableArray) {
+        RemotePlayService.activeSource?.setRegions(regions.toReadRegions())
+    }
+
     /** YUV karenin parlaklık (Y) düzlemini gri tonlamalı PNG olarak kaydeder. */
     private fun saveLuma(image: Image): String {
         val plane = image.planes[0]
@@ -291,6 +378,7 @@ class RemotePlayModule(
         private const val TAG = "RemotePlayModule"
         private const val WARMUP_FRAMES = 90
         private const val TIMEOUT_MS = 25_000L
+        private const val SNAPSHOT_LIVE_TIMEOUT_MS = 10_000L
         private const val HOLD_SAVE_INTERVAL_MS = 5_000L
         private const val E_INPUT = "E_INPUT"
         private const val E_REGIST = "E_REGIST"

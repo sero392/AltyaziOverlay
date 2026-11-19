@@ -1,0 +1,6 @@
+{
+  "name": "com.altyazioverlay.tv.service",
+  "version": "0.1.0",
+  "description": "Altyazı TV alıcı servisi (TCP 47800 + mDNS)",
+  "main": "service.js"
+}

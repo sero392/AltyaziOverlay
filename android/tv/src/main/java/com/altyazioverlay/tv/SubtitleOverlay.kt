@@ -35,6 +35,9 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
 
     private val autoHide = Runnable { textView?.visibility = View.GONE }
 
+    /** Son altyazının İngilizce aslının ekrandaki yeri (gönderen biliyorsa). */
+    private var box: SubtitleBox? = null
+
     val canDraw: Boolean get() = Settings.canDrawOverlays(appContext)
 
     fun attach(): Boolean {
@@ -48,7 +51,7 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setShadowLayer(8f, 0f, 0f, Color.BLACK)
-            setPadding(dp(28), dp(12), dp(28), dp(12))
+            setPadding(dp(14), dp(5), dp(14), dp(5))
             background = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
             }
@@ -89,16 +92,48 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
     }
 
     /** Konum ya da telefondan gelen stil değişince çağrılır. Herhangi bir thread'den çağrılabilir. */
-    fun applySettings() = mainHandler.post {
-        val tv = textView ?: return@post
-        val lp = params ?: return@post
+    fun applySettings() = mainHandler.post { layout() }
+
+    /** Ana thread'de çağrılır: stil + konum. */
+    private fun layout() {
+        val tv = textView ?: return
+        val lp = params ?: return
         val style = settings.style
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, style.fontSize)
         tv.setTextColor(style.textColor)
+        val metrics = appContext.resources.displayMetrics
+        val screenWidth = metrics.widthPixels
+        val screenHeight = metrics.heightPixels
+        val over = box?.takeIf { settings.position == TvSettings.Position.OVER_ORIGINAL }
+
+        // Varsayılan (konum bilgisi yok): ortada, metin kadar.
+        tv.minWidth = 0
+        tv.minHeight = 0
+        tv.maxWidth = (screenWidth * 0.9f).toInt()
+        tv.translationX = 0f
         (tv.background as? GradientDrawable)?.setColor(style.bgColor)
-        val screenHeight = appContext.resources.displayMetrics.heightPixels
+
+        if (over != null) {
+            // İngilizce altyazının tam üstü: kutu en az onun kadar geniş/yüksek, alt kenarları hizalı,
+            // arka plan neredeyse opak (alttaki İngilizce okunmasın).
+            val padH = tv.paddingLeft + tv.paddingRight
+            val padV = tv.paddingTop + tv.paddingBottom
+            tv.minWidth = (over.w * screenWidth).toInt() + padH
+            tv.minHeight = (over.h * screenHeight).toInt() + padV
+            tv.translationX = (over.x + over.w / 2f - 0.5f) * screenWidth
+            val alpha = maxOf(Color.alpha(style.bgColor), MIN_OVER_ALPHA)
+            (tv.background as? GradientDrawable)?.setColor(
+                Color.argb(alpha, Color.red(style.bgColor), Color.green(style.bgColor), Color.blue(style.bgColor)),
+            )
+            lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            lp.y = ((1f - over.y - over.h) * screenHeight).toInt() - tv.paddingBottom
+            lp.y = lp.y.coerceAtLeast(0)
+            root?.let { windowManager.updateViewLayout(it, lp) }
+            return
+        }
+
         when (settings.position) {
-            TvSettings.Position.BOTTOM -> {
+            TvSettings.Position.OVER_ORIGINAL, TvSettings.Position.BOTTOM -> {
                 lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 lp.y = (screenHeight * 0.06f).toInt()
             }
@@ -114,13 +149,20 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
         root?.let { windowManager.updateViewLayout(it, lp) }
     }
 
-    /** Herhangi bir thread'den çağrılabilir. Boş metin gizler. */
-    fun show(text: String) = mainHandler.post {
+    /**
+     * Herhangi bir thread'den çağrılabilir. Boş metin gizler. [box] İngilizce altyazının yeri;
+     * konum "İngilizcenin üstünde" ise çeviri oraya yazılır.
+     */
+    fun show(text: String, box: SubtitleBox? = null) = mainHandler.post {
         val tv = textView ?: return@post
         mainHandler.removeCallbacks(autoHide)
         if (text.isBlank()) {
             tv.visibility = View.GONE
         } else {
+            if (box != this.box) {
+                this.box = box
+                layout()
+            }
             tv.text = text
             tv.visibility = View.VISIBLE
             mainHandler.postDelayed(autoHide, AUTO_HIDE_MS)
@@ -141,5 +183,7 @@ class SubtitleOverlay(context: Context, private val settings: TvSettings) {
     companion object {
         private const val TAG = "SubtitleOverlay"
         private const val AUTO_HIDE_MS = 12_000L
+        /** Asıl altyazının üstüne yazarken arka planın en az opaklığı (0-255). */
+        private const val MIN_OVER_ALPHA = 255
     }
 }

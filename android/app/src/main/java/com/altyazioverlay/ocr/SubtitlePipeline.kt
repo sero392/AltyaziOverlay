@@ -62,7 +62,7 @@ class SubtitlePipeline(
         val startedAt = SystemClock.elapsedRealtime()
         ocrStartedAt = startedAt
         try {
-            recognizer.recognize(frame.bitmap, frame.contentWidth) { text ->
+            recognizer.recognize(frame.bitmap, frame.contentWidth, frame.sourceWidth, frame.sourceHeight) { text ->
                 onOcrResult(requestId, frame, text, id, startedAt)
             }
         } catch (t: Throwable) {
