@@ -159,30 +159,6 @@
           TV APK'sını indir
         </a>
       </div>
-      <div class="card">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="13" rx="2"/><path d="M2 12h20M9 21h6M12 16v5"/></svg>
-          Masaüstü (Windows)
-        </h3>
-        <p>Telefonun yaptığı işi bilgisayarda yapar. Çeviriyi ekranın altında, her şeyin üstünde ya da Altyazı TV'de gösterir. Kurulum gerektirmez.</p>
-        <p class="req">Windows 10 / 11 (64 bit) · <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener">.NET 10 Çalışma Zamanı</a></p>
-        <a class="btn" href="AltyaziCevirmeni-masaustu.exe" download>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-          Masaüstü uygulamasını indir
-        </a>
-      </div>
-      <div class="card">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 9v4h3M14 9h-2v4h2v-2"/></svg>
-          Altyazı TV (LG)
-        </h3>
-        <p>LG TV'ler başka bir girişin üstüne çizemediği için PS5'in HDMI girişini kendi içinde tam ekran gösterir ve çeviriyi üstüne yazar. Deneme sürümüdür.</p>
-        <p class="req">LG webOS 5 (2020) ve üzeri · Geliştirici Modu</p>
-        <a class="btn" href="AltyaziTV-LG.ipk" download>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-          LG TV paketini indir
-        </a>
-      </div>
     </div>
   </section>
 
@@ -190,10 +166,10 @@
     <h2>Nasıl çalışır?</h2>
     <ol class="flow">
       <li><strong>Oyunu oyna</strong><span>PS5 her zamanki gibi HDMI ile TV'ye bağlı. Görüntüde gecikme olmaz.</span></li>
-      <li><strong>Telefon ya da bilgisayar izler</strong><span>Uygulama PS5'e Remote Play ile bağlanır. Telefonun ekranı kapalı, masada durabilir.</span></li>
+      <li><strong>Telefon izler</strong><span>Uygulama PS5'e Remote Play ile bağlanır. Telefonun ekranı kapalı, masada durabilir.</span></li>
       <li><strong>Altyazıyı okur</strong><span>Görüntünün yalnızca altyazı bölgesini cihazın kendisinde okur (OCR). Menü ve tuş ipuçları elenir.</span></li>
       <li><strong>Çevirir</strong><span>Metni DeepL, cihaz içi Google ML Kit ya da otomatik seçimle Türkçeye çevirir. Karakter ve yer adları gibi çevrilmeyecek kelimeleri kendin belirleyebilirsin.</span></li>
-      <li><strong>Gösterir</strong><span>Çeviri Wi-Fi ile TV'ye gider ve oyunun üstünde belirir. Yazı boyutunu, yazı ve arka plan rengini ayarlayabilirsin. Masaüstü sürümü bilgisayar ekranında da gösterebilir.</span></li>
+      <li><strong>Gösterir</strong><span>Çeviri Wi-Fi ile TV'ye gider ve oyunun üstünde belirir. Yazı boyutunu, yazı ve arka plan rengini ayarlayabilirsin.</span></li>
     </ol>
   </section>
 
@@ -201,21 +177,18 @@
     <h2>Bilmen gerekenler</h2>
     <div class="notes">
       <ul>
-        <li><strong>Aynı ağ.</strong> <span>PS5, telefon (ya da bilgisayar) ve TV aynı ağda olmalı.</span></li>
+        <li><strong>Aynı ağ.</strong> <span>PS5, telefon ve TV aynı ağda olmalı.</span></li>
         <li><strong>Ayrı bir PSN hesabı.</strong> <span>Uygulama kendi hesabınla bağlanırsa kolun oyundan kopar. Ücretsiz ikinci bir PSN hesabı açıp PS5'e ekle ve o hesapta Uzaktan Oynatma'yı etkinleştir.</span></li>
         <li><strong>DeepL anahtarı (isteğe bağlı).</strong> <span>Ücretsiz DeepL API Free anahtarı ayda 500.000 karakter çeviri verir. Anahtar yoksa cihaz içi çeviri kullanılır.</span></li>
         <li><strong>TV izni.</strong> <span>Altyazı TV'nin ekranın üstüne çizebilmesi için bilgisayardan bir kez şu komutu çalıştır:</span><br><code>adb shell appops set com.altyazioverlay.tv SYSTEM_ALERT_WINDOW allow</code></li>
-        <li><strong>Tüm sayfayı çevir (masaüstü).</strong> <span>Menüleri, notları ve mektupları çevirmek için masaüstü sürümü ekrandaki her yazıyı ayrı çevirip İngilizcenin tam üstüne yazabilir.</span></li>
-        <li><strong>LG TV kurulumu.</strong> <span>Paket LG Content Store'da yok; TV'de Developer Mode uygulamasıyla Geliştirici Modu'nu açıp bilgisayardan <code>npx ares-install --device lgtv AltyaziTV-LG.ipk</code> ile kur. Geliştirici Modu 50 saatte bir uzatılmalı. Oyun uygulamanın video katmanında gösterildiği için giriş gecikmesi artabilir.</span></li>
         <li><strong>Gizlilik.</strong> <span>Görüntü buluta gönderilmez. Dışarıya yalnızca çevrilecek altyazı metni gider.</span></li>
         <li><strong>APK kurulumu.</strong> <span>Cihazın "bilinmeyen kaynaklardan yükleme" izni istemesi normaldir; tarayıcına ya da dosya yöneticine bu izni ver.</span></li>
-        <li><strong>Windows uyarısı.</strong> <span>Uygulama imzalı olmadığı için Windows "bilgisayarınız korundu" uyarısı gösterebilir. "Ek bilgi" ve ardından "Yine de çalıştır" seç. Masaüstü sürümü için <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener">.NET 10 Çalışma Zamanı</a> kurulu olmalı.</span></li>
       </ul>
     </div>
   </section>
 </main>
 
-<footer class="wrap">Altyazı Çevirmeni · Android, Android TV, LG webOS ve Windows için açık kaynak uygulama</footer>
+<footer class="wrap">Altyazı Çevirmeni · Android ve Android TV için açık kaynak uygulama</footer>
 
 </body>
 </html>
