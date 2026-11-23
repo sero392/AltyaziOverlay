@@ -32,7 +32,7 @@ class TvSettings(context: Context) {
                 val bg = parseColor(o.optString("bgColor"), Color.BLACK)
                 val opacity = o.optInt("bgOpacity", 75).coerceIn(0, 100)
                 return Style(
-                    fontSize = o.optDouble("fontSize", d.fontSize.toDouble()).toFloat().coerceIn(10f, 72f),
+                    fontSize = o.optDouble("fontSize", d.fontSize.toDouble()).toFloat().coerceIn(10f, 100f),
                     textColor = parseColor(o.optString("textColor"), d.textColor),
                     bgColor = Color.argb(opacity * 255 / 100, Color.red(bg), Color.green(bg), Color.blue(bg)),
                 )

@@ -98,11 +98,14 @@ class RemotePlayService : Service() {
         }
 
         val source = RemotePlayFrameSource(config)
+        source.diagDir = getExternalFilesDir("miss")
         val pipe = SubtitlePipeline(
             config = config,
             recognizer = TextRecognizerEngine(source.callbackExecutor),
             onSubtitle = SubtitleEventBus::publishSubtitle,
+            onCandidate = SubtitleEventBus::publishCandidate,
             debugDir = if (isDebuggable()) getExternalFilesDir("debug") else null,
+            missDir = getExternalFilesDir("miss"),
         )
         source.start(pipe)
         frameSource = source

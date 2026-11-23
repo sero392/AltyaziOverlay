@@ -104,6 +104,7 @@ export class DeepLTranslationService implements TranslationService {
     }
 
     let res: HttpResponse;
+    const t0 = Date.now();
     try {
       res = await this.http({
         url: this.baseUrl + path,
@@ -117,6 +118,7 @@ export class DeepLTranslationService implements TranslationService {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      console.log(`[deepl] ${path} ag hatasi ${Date.now() - t0}ms: ${msg}`);
       throw new Error(
         /timeout|timed out/i.test(msg)
           ? `DeepL: ${this.timeoutMs / 1000} sn içinde yanıt yok`
@@ -129,6 +131,7 @@ export class DeepLTranslationService implements TranslationService {
       throw new AbortError();
     }
 
+    console.log(`[deepl] ${path} ${res.status} ${Date.now() - t0}ms`);
     let json: any = null;
     try {
       json = res.body ? JSON.parse(res.body) : null;

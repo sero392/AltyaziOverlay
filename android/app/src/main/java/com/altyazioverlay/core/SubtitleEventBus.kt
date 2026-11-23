@@ -22,6 +22,8 @@ object SubtitleEventBus {
     interface Listener {
         fun onSubtitle(event: SubtitleEvent)
         fun onCaptureStateChanged(running: Boolean, error: String?)
+        /** OCR'da yeni, henüz kararlı olmayan metin (çeviriyi önceden başlatmak için). */
+        fun onCandidate(text: String) {}
     }
 
     private val listeners = CopyOnWriteArraySet<Listener>()
@@ -36,6 +38,10 @@ object SubtitleEventBus {
 
     fun publishSubtitle(event: SubtitleEvent) {
         listeners.forEach { it.onSubtitle(event) }
+    }
+
+    fun publishCandidate(text: String) {
+        listeners.forEach { it.onCandidate(text) }
     }
 
     fun publishState(running: Boolean, error: String? = null) {

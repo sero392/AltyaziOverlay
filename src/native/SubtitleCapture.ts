@@ -99,6 +99,7 @@ interface SubtitleCaptureNative {
 const EVENT_TEXT = 'SubtitleCapture_onText';
 const EVENT_STATE = 'SubtitleCapture_onState';
 const EVENT_TV_STATE = 'SubtitleCapture_onTvState';
+const EVENT_CANDIDATE = 'SubtitleCapture_onCandidate';
 
 const Native: SubtitleCaptureNative | undefined =
   Platform.OS === 'android' ? NativeModules.SubtitleCapture : undefined;
@@ -198,6 +199,18 @@ export const SubtitleCapture = {
     return (
       emitter?.addListener(EVENT_TEXT, e => listener(e as SubtitleTextEvent)) ??
       null
+    );
+  },
+
+  /**
+   * OCR'da yeni görülen, henüz kararlı olmayan metin. Yalnızca çeviriyi önceden başlatmak
+   * (önbelleği ısıtmak) için; ekrana basılmaz.
+   */
+  onCandidate(listener: (text: string) => void): EmitterSubscription | null {
+    return (
+      emitter?.addListener(EVENT_CANDIDATE, e =>
+        listener((e as { text: string }).text),
+      ) ?? null
     );
   },
 

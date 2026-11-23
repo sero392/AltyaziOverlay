@@ -126,6 +126,9 @@ dependencies {
     implementation(project(":remoteplay"))
     implementation("androidx.core:core-ktx:1.16.0")
 
+    // Saf Kotlin filtrelerin (SubtitleHeuristics, TextChangeFilter) JVM birim testleri.
+    testImplementation("junit:junit:4.13.2")
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

@@ -351,6 +351,10 @@ class SubtitleCaptureModule(
         })
     }
 
+    override fun onCandidate(text: String) {
+        emit(EVENT_CANDIDATE, Arguments.createMap().apply { putString("text", text) })
+    }
+
     override fun onCaptureStateChanged(running: Boolean, error: String?) {
         emit(EVENT_STATE, Arguments.createMap().apply {
             putBoolean("running", running)
@@ -368,6 +372,7 @@ class SubtitleCaptureModule(
         const val NAME = "SubtitleCapture"
         const val EVENT_TEXT = "SubtitleCapture_onText"
         const val EVENT_STATE = "SubtitleCapture_onState"
+        const val EVENT_CANDIDATE = "SubtitleCapture_onCandidate"
         const val EVENT_TV_STATE = "SubtitleCapture_onTvState"
 
         private const val REQUEST_MEDIA_PROJECTION = 0x5C1

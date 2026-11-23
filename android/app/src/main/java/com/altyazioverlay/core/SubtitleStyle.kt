@@ -44,7 +44,7 @@ data class SubtitleStyle(
             val o = json?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return SubtitleStyle()
             val d = SubtitleStyle()
             return SubtitleStyle(
-                fontSize = o.optDouble("fontSize", d.fontSize.toDouble()).toFloat().coerceIn(12f, 72f),
+                fontSize = o.optDouble("fontSize", d.fontSize.toDouble()).toFloat().coerceIn(12f, 100f),
                 textColor = o.optString("textColor", d.textColor),
                 bgColor = o.optString("bgColor", d.bgColor),
                 bgOpacity = o.optInt("bgOpacity", d.bgOpacity).coerceIn(0, 100),

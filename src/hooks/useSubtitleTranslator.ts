@@ -8,6 +8,8 @@ import {
 import { useSubtitleStream } from './useSubtitleStream';
 
 const HISTORY_LIMIT = 30;
+/** Bundan kısa / tek kelimelik adaylar önceden çevrilmez (titrek OCR okumaları kota yemesin). */
+const PREFETCH_MIN_CHARS = 8;
 
 /**
  * Orkestrasyon: native metin -> çeviri -> yüzen pencere.
@@ -39,6 +41,7 @@ export function useSubtitleTranslator(service: TranslationService) {
   const handleText = useCallback(
     async (event: SubtitleTextEvent) => {
       const text = event.text.trim();
+      console.log(`[ceviri] olay geldi :: ${text}`);
 
       // Önceki istek artık geçersiz.
       if (abortRef.current) {
@@ -82,6 +85,15 @@ export function useSubtitleTranslator(service: TranslationService) {
         }
         abortRef.current = null;
         SubtitleCapture.setOverlayText(result.text);
+        if (result.text.trim().toLowerCase() === text.toLowerCase()) {
+          console.log(`[ceviri] CEVRILMEDI (motor ayni metni dondurdu) :: ${text}`);
+        }
+        // Teşhis: adb logcat -s ReactNativeJS ile gecikme ölçümü (çeviri / OCR olayından ekrana).
+        console.log(
+          `[ceviri] ${Date.now() - startedAt}ms uctan-uca=${
+            Date.now() - event.timestamp
+          }ms ${result.fromCache ? 'onbellek' : result.engine ?? 'ML Kit'} :: ${text}`,
+        );
         patchEntry(id, {
           translated: result.text,
           status: 'done',
@@ -94,6 +106,11 @@ export function useSubtitleTranslator(service: TranslationService) {
           cacheHits: s.cacheHits + (result.fromCache ? 1 : 0),
         }));
       } catch (e) {
+        console.log(
+          `[ceviri] HATA ${Date.now() - startedAt}ms ${
+            isAbortError(e) ? 'iptal' : e instanceof Error ? e.message : String(e)
+          } :: ${text}`,
+        );
         if (isAbortError(e)) {
           patchEntry(id, {
             status: 'error',
@@ -116,6 +133,22 @@ export function useSubtitleTranslator(service: TranslationService) {
   );
 
   useSubtitleStream(handleText);
+
+  // Erken çeviri: native, metin kararlı hale gelmeden (bir okuma önce) aday olayı gönderir.
+  // Çeviri o an başlatılır; CachedTranslationService aynı metnin isteklerini birleştirdiği
+  // için kesin olay geldiğinde yanıt ya hazırdır ya da yoldadır.
+  const serviceRef = useRef(service);
+  serviceRef.current = service;
+  useEffect(() => {
+    const sub = SubtitleCapture.onCandidate(raw => {
+      const text = raw.trim();
+      if (text.length < PREFETCH_MIN_CHARS || !text.includes(' ')) {
+        return;
+      }
+      serviceRef.current.translate(text).catch(() => {});
+    });
+    return () => sub?.remove();
+  }, []);
 
   useEffect(
     () => () => {

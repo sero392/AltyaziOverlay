@@ -8,6 +8,9 @@ import com.altyazioverlay.capture.FrameSink
 import com.altyazioverlay.core.SubtitleEvent
 import com.altyazioverlay.service.CaptureConfig
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Kare -> piksel diff -> (gerekirse) OCR -> metin diff -> olay.
@@ -19,8 +22,15 @@ class SubtitlePipeline(
     config: CaptureConfig,
     private val recognizer: TextRecognizerEngine,
     private val onSubtitle: (SubtitleEvent) -> Unit,
+    /** Yeni aday metin (henüz kararlı değil): çeviri önceden başlatılsın diye. */
+    private val onCandidate: (String) -> Unit = {},
     /** Debug: son kırpılmış kare buraya PNG olarak yazılır (adb pull ile incelenir). */
     private val debugDir: File? = null,
+    /**
+     * Teşhis (geçici): OCR yazı okuduğu halde altyazı çıkmayan kareler buraya PNG olarak yazılır
+     * ve logda "KACIRILDI" satırıyla dosya adı + eleme sebebi görünür.
+     */
+    private val missDir: File? = null,
 ) : FrameSink {
 
     private val pixelDiff = FrameDiffDetector()
@@ -62,7 +72,7 @@ class SubtitlePipeline(
         val startedAt = SystemClock.elapsedRealtime()
         ocrStartedAt = startedAt
         try {
-            recognizer.recognize(frame.bitmap, frame.contentWidth, frame.sourceWidth, frame.sourceHeight) { text ->
+            recognizer.recognize(frame.bitmap, frame.contentWidth, frame.sourceWidth, frame.sourceHeight, frame.bands) { text ->
                 onOcrResult(requestId, frame, text, id, startedAt)
             }
         } catch (t: Throwable) {
@@ -82,7 +92,15 @@ class SubtitlePipeline(
             return
         }
         val latency = SystemClock.elapsedRealtime() - startedAt
-        textFilter.onRecognized(text)?.let { publish(it, id, latency) }
+        val emitted = textFilter.onRecognized(text)
+        textFilter.lastDiscarded?.let { Log.d(TAG, "KARARSIZ (onaylanmadan atildi): \"$it\"") }
+        if (text.isEmpty()) recordMiss(frame.bitmap)
+        val fresh = textFilter.takeNewCandidate()
+        if (emitted != null) {
+            publish(emitted, id, latency)
+        } else if (fresh != null) {
+            onCandidate(fresh)
+        }
     }
 
     private fun publish(text: String, id: Long, latencyMs: Long) {
@@ -106,6 +124,31 @@ class SubtitlePipeline(
         }
     }
 
+    private var lastMissAt = 0L
+    private var lastMissRaw = ""
+    private var missCount = 0
+
+    /** Bitmap henüz yeniden kullanılmadı (ocrInFlight=false yapılmadan önce çağrılır). */
+    private fun recordMiss(bitmap: Bitmap) {
+        val dir = missDir ?: return
+        val diag = recognizer.lastDiag
+        val words = diag.raw.split(' ').count { w -> w.count(Char::isLetter) >= 2 }
+        if (words < 2 || diag.raw == lastMissRaw) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastMissAt < MISS_INTERVAL_MS || missCount >= MAX_MISS_FILES) return
+        lastMissAt = now
+        lastMissRaw = diag.raw
+        missCount++
+        val name = "miss_" + SimpleDateFormat("HHmmss_SSS", Locale.US).format(Date()) + ".png"
+        try {
+            dir.mkdirs()
+            File(dir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        } catch (t: Throwable) {
+            Log.w(TAG, "miss dump failed", t)
+        }
+        Log.d(TAG, "KACIRILDI $name sebep=${diag.reason ?: "?"} ham=${diag.lines.joinToString(" ; ")}")
+    }
+
     fun close() {
         closed = true
         recognizer.close()
@@ -115,5 +158,7 @@ class SubtitlePipeline(
         private const val TAG = "SubtitlePipeline"
         private const val DUMP_INTERVAL_MS = 3_000L
         private const val OCR_TIMEOUT_MS = 3_000L
+        private const val MISS_INTERVAL_MS = 1_500L
+        private const val MAX_MISS_FILES = 400
     }
 }

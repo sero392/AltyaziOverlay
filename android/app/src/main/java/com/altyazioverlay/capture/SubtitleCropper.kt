@@ -22,15 +22,25 @@ class CroppedFrame(
     val contentHeight: Int,
     val sourceWidth: Int,
     val sourceHeight: Int,
+    /** Birleşik karedeki okuma alanı şeritleri (aynı ölçekte). Boşsa kare tek alan sayılır. */
+    val bands: List<RegionBand> = emptyList(),
 )
+
+/**
+ * Birleşik karede bir okuma alanının kapladığı dikey şerit.
+ * @param top / bottom Birleşik karedeki y aralığı.
+ * @param width Alanın genişliği (ortalama filtresi: alan ekranı tam kaplıyor mu).
+ * @param screenTop Alanın ekrandaki üst kenarı: altyazı en alttaki alanda aranır önce.
+ */
+data class RegionBand(val top: Int, val bottom: Int, val width: Int, val screenTop: Int)
 
 /**
  * Ekran yakalamada (MediaProjection) okuma alanlarını Bitmap'e kopyalar.
  *
  * Optimizasyon: tam ekran Bitmap üretilmez. ImageReader'ın ham RGBA buffer'ında alanları
  * kapsayan satır şeridine atlanır ve SADECE o satırlar kopyalanır; tek bir Bitmap tekrar
- * tekrar kullanılır (GC baskısı yok). Alan tam genişlikte tek şeritse doğrudan o verilir,
- * değilse alanlar [RegionLayout]'a göre ikinci bir Bitmap'te birleştirilir.
+ * tekrar kullanılır (GC baskısı yok). Alanlar [RegionLayout]'a göre (kenar dolgusuyla)
+ * ikinci bir Bitmap'te birleştirilir.
  */
 class SubtitleCropper(private val regions: List<ReadRegion>) {
 
@@ -72,11 +82,7 @@ class SubtitleCropper(private val regions: List<ReadRegion>) {
         buffer.limit(buffer.capacity())
         lastBandTransparent = isBlank(bandBmp, width, bandHeight)
 
-        val single = l.sources.singleOrNull()
-        if (single != null && single.left == 0 && single.right == width) {
-            return CroppedFrame(bandBmp, width, bandHeight, width, height)
-        }
-
+        // Tam genişlikte tek şerit bile birleşik kareye kopyalanır: kenar dolgusu ([RegionLayout]) OCR için gerekli.
         val out = obtain(composed, l.width, l.height).also { composed = it }
         out.eraseColor(Color.BLACK)
         canvas.setBitmap(out)
@@ -86,7 +92,7 @@ class SubtitleCropper(private val regions: List<ReadRegion>) {
             canvas.drawBitmap(bandBmp, src, dst, null)
         }
         canvas.setBitmap(null)
-        return CroppedFrame(out, l.width, l.height, width, height)
+        return CroppedFrame(out, l.width, l.height, width, height, l.bands(1))
     }
 
     /**

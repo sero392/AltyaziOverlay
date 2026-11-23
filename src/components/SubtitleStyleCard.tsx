@@ -4,11 +4,34 @@ import { SubtitleStyle } from '../native/SubtitleCapture';
 import { Card, colors } from './ui';
 
 const MIN_SIZE = 10;
-const MAX_SIZE = 60;
+const MAX_SIZE = 100;
 const SIZE_STEP = 2;
 
-const TEXT_COLORS = ['#FFFFFF', '#FDE047', '#4ADE80', '#67E8F9', '#F9A8D4'];
-const BG_COLORS = ['#000000', '#1E293B', '#1E3A8A', '#3F3F46'];
+/** Gökkuşağının 7 ana rengi: kırmızı, turuncu, sarı, yeşil, mavi, lacivert, mor. */
+const RAINBOW_COLORS = [
+  '#EF4444',
+  '#F97316',
+  '#FACC15',
+  '#22C55E',
+  '#3B82F6',
+  '#4338CA',
+  '#A855F7',
+];
+const TEXT_COLORS = [
+  '#FFFFFF',
+  '#FDE047',
+  '#4ADE80',
+  '#67E8F9',
+  '#F9A8D4',
+  ...RAINBOW_COLORS,
+];
+const BG_COLORS = [
+  '#000000',
+  '#1E293B',
+  '#1E3A8A',
+  '#3F3F46',
+  ...RAINBOW_COLORS,
+];
 const BG_OPACITIES = [0, 25, 50, 75, 100];
 
 interface Props {
@@ -104,7 +127,7 @@ function Swatches({
   onChange: (v: string) => void;
 }) {
   return (
-    <View style={styles.row}>
+    <View style={styles.swatches}>
       {options.map(c => (
         <Pressable
           key={c}
@@ -183,6 +206,7 @@ const styles = StyleSheet.create({
   },
   stepText: { color: colors.text, fontSize: 20, fontWeight: '600' },
   disabled: { opacity: 0.4 },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   swatch: {
     width: 36,
     height: 36,

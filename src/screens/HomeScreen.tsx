@@ -20,6 +20,7 @@ import { SubtitleCapture } from '../native/SubtitleCapture';
 import { CachedTranslationService } from '../services/translation/CachedTranslationService';
 import { DeepLTranslationService } from '../services/translation/DeepLTranslationService';
 import { FallbackTranslationService } from '../services/translation/FallbackTranslationService';
+import { HedgedTranslationService } from '../services/translation/HedgedTranslationService';
 import { MlKitTranslationService } from '../services/translation/MlKitTranslationService';
 import { TranslationService } from '../services/translation/TranslationService';
 import { AppearanceTab } from './tabs/AppearanceTab';
@@ -27,6 +28,17 @@ import { RegionSetupScreen } from './RegionSetupScreen';
 import { DevicesTab } from './tabs/DevicesTab';
 import { ReadingTab } from './tabs/ReadingTab';
 import { TranslationTab } from './tabs/TranslationTab';
+
+/**
+ * DeepL bu sürede yanıt vermezse aynı metin için ikinci bir DeepL isteği gönderilir. Telefonda
+ * ölçülen DeepL süresi soğuk bağlantıda 600-850 ms, ısınınca 230-550 ms: 700 ms neredeyse her
+ * repliği iki kez gönderip kotayı yakıyordu.
+ */
+const DEEPL_RETRY_MS = 1200;
+/** Otomatik modda DeepL bu sürede yanıt vermezse cihazdaki ML Kit de yarışa girer. */
+const MLKIT_HEDGE_MS = 1200;
+/** Yayın sürerken DeepL bağlantısı bu aralıkla (kota harcamayan /v2/usage ile) sıcak tutulur. */
+const DEEPL_WARM_MS = 60_000;
 
 type Tab = 'reading' | 'translation' | 'appearance' | 'devices';
 
@@ -78,15 +90,38 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   useEffect(() => setDeeplOffReason(null), [deepl, engine.engine]);
 
   // Anahtar ya da motor değişmedikçe tek örnek (önbellek korunur). Anahtar yoksa ML Kit.
+  const mlkitReady = engine.modelReady === true;
   const translator = useMemo(() => {
     let inner: TranslationService = mlkit;
-    if (deepl && engine.engine === 'deepl') {
-      inner = deepl;
-    } else if (deepl && engine.engine === 'auto') {
-      inner = new FallbackTranslationService(deepl, mlkit, setDeeplOffReason);
+    if (deepl) {
+      // DeepL'in yavaş kalan yanıtı genellikle o isteğe özgü: DEEPL_RETRY_MS'de yanıt yoksa ikinci
+      // bir DeepL isteği gider, hangisi önce gelirse o kullanılır (masaüstüyle aynı).
+      const fastDeepl = new HedgedTranslationService(
+        deepl,
+        deepl,
+        () => {},
+        DEEPL_RETRY_MS,
+        SubtitleCapture.delay,
+      );
+      if (engine.engine === 'deepl') {
+        inner = fastDeepl;
+      } else if (engine.engine === 'auto') {
+        // ML Kit modeli cihazdaysa DeepL MLKIT_HEDGE_MS'de dönmezse ML Kit de yarışa girer: yavaş
+        // DeepL yanıtı yüzünden altyazı kaçmaz. Model yoksa (indirme oyunu yavaşlatmasın) yalnızca
+        // DeepL hata verince ML Kit'e geçilir.
+        inner = mlkitReady
+          ? new HedgedTranslationService(
+              fastDeepl,
+              mlkit,
+              setDeeplOffReason,
+              MLKIT_HEDGE_MS,
+              SubtitleCapture.delay,
+            )
+          : new FallbackTranslationService(fastDeepl, mlkit, setDeeplOffReason);
+      }
     }
     return new CachedTranslationService(inner);
-  }, [deepl, engine.engine, mlkit]);
+  }, [deepl, engine.engine, mlkit, mlkitReady]);
 
   const engineNote = describeEngine(
     engine.engine,
@@ -101,6 +136,27 @@ export function HomeScreen({ onOpenWizard }: { onOpenWizard: () => void }) {
   const subtitleStyle = useSubtitleStyle();
   const readRegions = useReadRegions();
   const { history, clearHistory } = useSubtitleTranslator(translator);
+
+  // Yayın sürerken DeepL bağlantısını sıcak tut: uzun sessiz bölümden sonraki ilk çeviri yeniden
+  // TLS el sıkışmasıyla (+100-300 ms) başlamasın. Bekleme native (arka planda da çalışır).
+  const usesDeepl = !!deepl && engine.engine !== 'mlkit';
+  useEffect(() => {
+    if (!session.running || !usesDeepl || !deepl) {
+      return;
+    }
+    let active = true;
+    (async () => {
+      while (active) {
+        // İki istek: yavaş kalan çeviriye ikinci DeepL isteği de sıcak bağlantıdan gitsin.
+        deepl.usage().catch(() => {});
+        deepl.usage().catch(() => {});
+        await SubtitleCapture.delay(DEEPL_WARM_MS);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [session.running, usesDeepl, deepl]);
 
   // ML Kit modeli ilk çeviride indirilir; çeviri gelince durum notunu tazele.
   const { modelReady, refreshModel } = engine;

@@ -113,7 +113,9 @@ class ScreenCaptureService : Service() {
                 config = config,
                 recognizer = TextRecognizerEngine(manager.callbackExecutor),
                 onSubtitle = SubtitleEventBus::publishSubtitle,
+                onCandidate = SubtitleEventBus::publishCandidate,
                 debugDir = if (isDebuggable()) getExternalFilesDir("debug") else null,
+                missDir = getExternalFilesDir("miss"),
             )
             manager.start(pipe)
             pipeline = pipe

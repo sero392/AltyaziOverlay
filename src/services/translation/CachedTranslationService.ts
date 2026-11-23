@@ -3,6 +3,7 @@ import {
   TranslationResult,
   TranslationService,
 } from './TranslationService';
+import { expandShorthand } from './shorthand';
 
 /**
  * LRU önbellek dekoratörü. Oyunlarda tekrar eden replikler (menü, "Follow me" vb.)
@@ -21,7 +22,10 @@ export class CachedTranslationService implements TranslationService {
     text: string,
     signal?: AbortSignal,
   ): Promise<TranslationResult> {
-    const key = text.trim().toLowerCase();
+    // "R U ok?" gibi kısaltmalar çeviri motoruna açık halleriyle gider; önbellekte de
+    // "Are you ok?" ile aynı kayıt sayılır.
+    text = expandShorthand(text);
+    const key = cacheKey(text);
 
     const cached = this.cache.get(key);
     if (cached !== undefined) {
@@ -55,6 +59,19 @@ export class CachedTranslationService implements TranslationService {
       }
     }
   }
+}
+
+/**
+ * OCR aynı repliği karelere göre farklı noktalama / boşlukla okuyabiliyor ("Hello there." /
+ * "Hello there" / "Hello  there…"): önbellek bunları aynı metin saymalı. Soru ve ünlem işareti
+ * anlamı değiştirdiği için korunur.
+ */
+export function cacheKey(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[.,;:"'`“”‘’…\-–—_()[\]{}*•·|~]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function raceWithAbort<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {

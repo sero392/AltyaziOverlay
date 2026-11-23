@@ -1,6 +1,8 @@
 package com.altyazioverlay.capture
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.media.Image
 import android.os.Handler
 import android.os.HandlerThread
@@ -36,6 +38,7 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
     // Çözücü thread'i yazar, yakalama thread'i okur; [pending] bayrağı sırayı korur.
     private var luma = ByteArray(0)
     private var lumaWidth = 0
+    private var lumaLayout: RegionLayout? = null
     private var lumaHeight = 0
     private var sourceWidth = 0
     private var sourceHeight = 0
@@ -43,6 +46,9 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
     // Yalnızca yakalama thread'inde.
     private var pixels = IntArray(0)
     private var bitmap: Bitmap? = null
+    private var upscaled: Bitmap? = null
+    private val canvas = Canvas()
+    private val filterPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
     fun start(frameSink: FrameSink) {
         sink = frameSink
@@ -54,6 +60,16 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
 
     /** Bir sonraki çözülmüş karede çağrılır (kurulum ekranı için anlık görüntü). */
     private val snapshotRequest = java.util.concurrent.atomic.AtomicReference<((FrameSnapshot) -> Unit)?>(null)
+
+    /**
+     * Teşhis (geçici): doluysa [FULL_FRAME_INTERVAL_MS]'de bir tam ekran JPEG buraya yazılır;
+     * okuma alanlarının dışında kalan altyazıları görmek için.
+     */
+    @Volatile
+    var diagDir: java.io.File? = null
+    private var lastFullFrameAt = 0L
+    private var fullFrameCount = 0
+    private val diagExecutor by lazy { java.util.concurrent.Executors.newSingleThreadExecutor() }
 
     fun setRegions(list: List<ReadRegion>) {
         regions = list
@@ -71,6 +87,22 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
         }
         val target = sink ?: return
         val now = SystemClock.elapsedRealtime()
+        val dir = diagDir
+        if (dir != null && now - lastFullFrameAt >= FULL_FRAME_INTERVAL_MS && fullFrameCount < MAX_FULL_FRAMES) {
+            lastFullFrameAt = now
+            fullFrameCount++
+            val snap = FrameSnapshot.capture(image)
+            val name = "full_" + java.text.SimpleDateFormat("HHmmss_SSS", java.util.Locale.US)
+                .format(java.util.Date()) + ".jpg"
+            diagExecutor.execute {
+                try {
+                    snap.save(java.io.File(dir, name))
+                    android.util.Log.d("OcrDiag", "TAM-EKRAN $name")
+                } catch (t: Throwable) {
+                    android.util.Log.w("OcrDiag", "full frame save failed", t)
+                }
+            }
+        }
         if (now - lastProcessedAt < config.intervalMs) return
         if (pending.get() || !target.isReady()) return
 
@@ -104,6 +136,7 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
             }
         }
         lumaWidth = width
+        lumaLayout = l
         lumaHeight = height
         sourceWidth = frameW
         sourceHeight = frameH
@@ -129,10 +162,37 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
                     bitmap = it
                 }
             bmp.setPixels(pixels, 0, w, 0, 0, w, h)
-            target.onFrame(CroppedFrame(bmp, w, h, sourceWidth, sourceHeight))
+            if (w < UPSCALE_BELOW_WIDTH && w.toLong() * h <= UPSCALE_MAX_PIXELS) {
+                // 720p yayında altyazı harfleri ML Kit için küçük kalıyor (masaüstündeki upscale.ts ile
+                // aynı neden): çift doğrusal 2x büyütme. Eşikler aynı ölçekte kalsın diye kaynak
+                // boyutu da 2 ile çarpılır.
+                val big = upscaled?.takeIf { it.width == w * 2 && it.height == h * 2 && !it.isRecycled }
+                    ?: Bitmap.createBitmap(w * 2, h * 2, Bitmap.Config.ARGB_8888).also {
+                        upscaled?.recycle()
+                        upscaled = it
+                    }
+                canvas.setBitmap(big)
+                canvas.save()
+                canvas.scale(2f, 2f)
+                canvas.drawBitmap(bmp, 0f, 0f, filterPaint)
+                canvas.restore()
+                canvas.setBitmap(null)
+                target.onFrame(CroppedFrame(big, w * 2, h * 2, sourceWidth * 2, sourceHeight * 2, lumaLayout?.bands(2).orEmpty()))
+            } else {
+                target.onFrame(CroppedFrame(bmp, w, h, sourceWidth, sourceHeight, lumaLayout?.bands(1).orEmpty()))
+            }
         } finally {
             pending.set(false)
         }
+    }
+
+    private companion object {
+        /** Bu genişliğin altındaki OCR kareleri 2x büyütülür (masaüstü: UPSCALE_BELOW_WIDTH). */
+        const val UPSCALE_BELOW_WIDTH = 1600
+        /** Büyütme öncesi en çok piksel: çok büyük alanlarda OCR süresi gereksiz uzamasın. */
+        const val UPSCALE_MAX_PIXELS = 700_000L
+        const val FULL_FRAME_INTERVAL_MS = 10_000L
+        const val MAX_FULL_FRAMES = 400
     }
 
     fun stop() {
@@ -140,6 +200,8 @@ class RemotePlayFrameSource(private val config: CaptureConfig) {
         handler.post {
             bitmap?.recycle()
             bitmap = null
+            upscaled?.recycle()
+            upscaled = null
         }
         thread.quitSafely()
     }

@@ -3,10 +3,10 @@ import { SubtitleCapture } from '../native/SubtitleCapture';
 
 const KEY_INTERVAL = 'ocr_interval_ms';
 
-export const OCR_INTERVALS = [300, 500, 800];
+export const OCR_INTERVALS = [200, 300, 500, 800];
 
 /** Arayüzde okuma aralığı gizliyken kullanılan sabit değer. Okuma alanı: useReadRegions. */
-export const DEFAULT_OCR_SETTINGS = { intervalMs: 300 };
+export const DEFAULT_OCR_SETTINGS = { intervalMs: 200 };
 
 /** OCR aralığı (kalıcı). Şu an arayüzde kullanılmıyor. */
 export function useOcrSettings() {

@@ -21,8 +21,25 @@ class TextChangeFilter(
     private var candidateRaw: String? = null
     private var candidateNorm: String = ""
     private var candidateHits = 0
+    /** Yeni başlayan, henüz onaylanmamış aday (bkz. [takeNewCandidate]). */
+    private var freshCandidate: String? = null
+
+    /**
+     * Son [onRecognized] çağrısında yeni bir aday metin başladıysa onu döndürür (bir kez).
+     * Kararlılık onayı beklenirken çeviriye erkenden başlamak için kullanılır.
+     */
+    fun takeNewCandidate(): String? = freshCandidate.also { freshCandidate = null }
+
+    /**
+     * Teşhis: son [onRecognized] çağrısında onaylanmadan (kararlı hale gelmeden) atılan aday.
+     * Her karede değişen okuma hiç yayınlanmaz; bunu görmek için.
+     */
+    var lastDiscarded: String? = null
+        private set
 
     fun onRecognized(raw: String): String? {
+        freshCandidate = null
+        lastDiscarded = null
         val norm = normalize(raw)
         if (candidateRaw != null && isSimilar(norm, candidateNorm)) {
             candidateHits++
@@ -32,9 +49,14 @@ class TextChangeFilter(
                 candidateNorm = norm
             }
         } else {
+            lastDiscarded = candidateRaw?.takeIf {
+                candidateNorm.isNotEmpty() && candidateHits < stableFrames &&
+                    !isSimilar(candidateNorm, lastEmittedNorm)
+            }
             candidateRaw = raw
             candidateNorm = norm
             candidateHits = 1
+            if (norm.isNotEmpty() && !isSimilar(norm, lastEmittedNorm)) freshCandidate = raw
         }
         return tryEmit()
     }
@@ -50,6 +72,7 @@ class TextChangeFilter(
         candidateRaw = null
         candidateNorm = ""
         candidateHits = 0
+        freshCandidate = null
     }
 
     private fun tryEmit(): String? {

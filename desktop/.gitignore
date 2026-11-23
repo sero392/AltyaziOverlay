@@ -6,3 +6,10 @@ resources/bin/
 native/build/
 native/.toolchain/
 build/
+
+# debug kayıtları (ALTYAZI_RECORD)
+rec*/
+
+# ocr-helper derleme çıktıları
+native/ocr-helper/bin/
+native/ocr-helper/obj/
